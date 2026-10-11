@@ -1,0 +1,31 @@
+#!/bin/bash
+
+# Define the path to the executable and the target Tails user
+HERE="$(dirname "$(readlink -f "$0")")"
+APP_PATH="$HERE/usr/bin/redcourier"
+TAILS_USER="amnesia"
+
+# --- Conditional Execution ---
+
+# 1. Check if the current user is the default Tails user ('amnesia')
+if [ "$USER" = "$TAILS_USER" ]; then
+    echo "Tails OS (User: $USER) detected. Starting application with torsocks."
+
+    # Check if torsocks is installed and available in the PATH
+    if ! command -v torsocks &> /dev/null; then
+        echo "ERROR: torsocks not found in PATH. Starting application directly (Fallback)."
+        # Fallback: Start without torsocks if it is missing
+        exec "$APP_PATH" "$@"
+    else
+        # Start the application via torsocks
+        exec torsocks "$APP_PATH" "$@"
+    fi
+else
+    echo "Standard environment (User: $USER) detected. Starting application directly."
+
+    # Start the application directly
+    exec "$APP_PATH" "$@"
+fi
+
+# Note: 'exec' replaces the current shell process with the new process,
+# so the script itself does not continue running in the background.

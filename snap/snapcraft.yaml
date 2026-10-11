@@ -1,0 +1,77 @@
+name: redcourier
+base: core22
+version: '1.0.0'
+summary: Red Courier
+description: |
+  Red Courier — a Flutter-based desktop courier management application.
+title: Red Courier
+icon: snap/gui/redcourier.png
+grade: stable
+confinement: strict
+
+apps:
+  redcourier:
+    command: redcourier
+    plugs:
+      - opengl
+      - desktop
+      - desktop-legacy
+      - home
+      - network
+      - network-bind
+      - x11
+      - wayland
+      - unity7
+      - audio-playback
+      - browser-support
+      - gsettings
+    environment:
+      # Grafik- und GTK-Umgebungsvariablen
+      LIBGL_DRIVERS_PATH: $SNAP/usr/lib/x86_64-linux-gnu/dri
+      LD_LIBRARY_PATH: $SNAP/usr/lib/x86_64-linux-gnu:$SNAP/usr/lib:$LD_LIBRARY_PATH
+      XDG_DATA_DIRS: $SNAP/usr/share:$SNAP/share:$XDG_DATA_DIRS
+      GTK_PATH: $SNAP/usr/lib/x86_64-linux-gnu/gtk-3.0
+      GTK_EXE_PREFIX: $SNAP
+      GDK_PIXBUF_MODULE_FILE: $SNAP/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders.cache
+
+parts:
+  app:
+    plugin: flutter
+    source: .
+    flutter-target: lib/main.dart
+
+    # Falls dein System Flutter nicht global installiert hat:
+    build-snaps:
+      - flutter/latest/stable
+
+    build-packages:
+      - libgtk-3-dev
+      - libarchive-dev
+
+    stage-packages:
+      # GTK & Grafik
+      - libcanberra-gtk3-module
+      - libxkbcommon0
+      - libglib2.0-bin
+      - libgtk-3-0
+      - libgdk-pixbuf2.0-0
+      - libatk1.0-0
+      - libcairo2
+      - libpango-1.0-0
+      - libpangocairo-1.0-0
+      - libx11-6
+      - libxrandr2
+      - libxext6
+      - libxrender1
+      - libglu1-mesa
+      - libgl1
+      - libglx-mesa0
+      - libegl1
+      - libdrm2
+      - libgbm1
+      - mesa-utils
+
+    organize:
+      # Icon und Desktop-Datei
+      snap/gui/redcourier.png: usr/share/icons/hicolor/48x48/apps/redcourier.png
+      snap/gui/redcourier.desktop: meta/gui/redcourier.desktop

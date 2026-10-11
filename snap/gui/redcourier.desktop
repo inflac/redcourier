@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Red Courier
+Comment=Red Courier App
+Exec=redcourier
+Icon=${SNAP}/meta/gui/redcourier.png
+Terminal=false
+Type=Application
+Categories=Utility;
+StartupNotify=true
