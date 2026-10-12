@@ -1,6 +1,6 @@
 [Desktop Entry]
-Name=Red Courier
-Comment=Red Courier App
+Name=RedCourier
+Comment=End-to-end encrypted file delivery over Tor
 Exec=redcourier
 Icon=${SNAP}/meta/gui/redcourier.png
 Terminal=false

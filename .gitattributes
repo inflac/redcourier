@@ -1,0 +1,4 @@
+# Shell scripts must keep Unix line endings, also when checked out on Windows.
+*.sh text eol=lf
+AppImage/RedCourier/AppDir/AppRun text eol=lf
+*.desktop text eol=lf

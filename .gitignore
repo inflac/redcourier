@@ -55,3 +55,12 @@ AppImage/RedCourier/AppDir/usr/bin/*
 /parts/
 /stage/
 /prime/
+
+# Release builds from build.sh
+/dist/
+/android/.kotlin/
+
+# Signing keys never go into git (Android keystore, private release keys).
+*.jks
+*.keystore
+key.properties

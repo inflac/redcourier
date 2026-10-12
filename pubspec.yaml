@@ -1,5 +1,5 @@
 name: redcourier
-description: "Red Courier"
+description: "RedCourier"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+version: 0.1.0+1
 
 environment:
   sdk: ^3.6.1
@@ -30,26 +30,27 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
-  flutter_launcher_icons: ^0.14.4
-  package_info_plus: ^9.0.0
-  http: ^1.5.0
+  package_info_plus: 10.2.1
   crypto: ^3.0.6
-  archive: ^4.0.7
-  encrypt: ^5.0.3
   path_provider: ^2.1.5
-  permission_handler: ^12.0.1
   qr_flutter: ^4.1.0
-  app_links: ^6.4.1
-  fluttertoast: ^9.0.0
+  fluttertoast: 10.0.0
   collection: ^1.19.1
-  file_picker: ^10.3.3
+  file_picker: ^13.1.0
   file_selector: ^1.0.4
-  shared_preferences: ^2.5.3
-
+  convert: any
+  path: any
+  cryptography: ^2.7.0
+  pqcrypto: 0.4.2
+  archive: 4.0.7
+  flutter_zxing: 3.0.1
+  flutter_local_notifications: 22.3.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -60,14 +61,22 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
-flutter_icons:
+flutter_launcher_icons:
   android: true
   ios: false
-  image_path: "assets/icon/app_icon.png"
+  image_path: "assets/icon/app_icon_full.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "assets/icon/ic_background.png"
+  adaptive_icon_foreground: "assets/icon/ic_foreground.png"
+  windows:
+    generate: true
+    image_path: "assets/icon/app_icon_rounded.png"
+    icon_size: 256
 
 # The following section is specific to Flutter packages.
 flutter:

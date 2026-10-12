@@ -1,10 +1,13 @@
 name: redcourier
 base: core22
-version: '1.0.0'
-summary: Red Courier
+version: '0.1.0'
+summary: End-to-end encrypted file delivery for small groups, over Tor
 description: |
-  Red Courier — a Flutter-based desktop courier management application.
-title: Red Courier
+  RedCourier sends end-to-end encrypted files to the members of a group.
+  A shared WebDAV folder (for example on Nextcloud) holds the signed group
+  state, the encrypted files go to public file sharing services, and all
+  traffic goes through Tor.
+title: RedCourier
 icon: snap/gui/redcourier.png
 grade: stable
 confinement: strict

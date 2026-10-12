@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "de.red.rc" "\0"
-            VALUE "FileDescription", "redcourier" "\0"
+            VALUE "FileDescription", "RedCourier" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "redcourier" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2025 de.red.rc. All rights reserved." "\0"
             VALUE "OriginalFilename", "redcourier.exe" "\0"
-            VALUE "ProductName", "redcourier" "\0"
+            VALUE "ProductName", "RedCourier" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

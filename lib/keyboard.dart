@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'theme.dart';
+
 class CustomKeyboard extends StatefulWidget {
   final void Function(String) onKeyPress;
   final VoidCallback? onBackspace;
@@ -66,7 +68,7 @@ class _CustomKeyboardState extends State<CustomKeyboard> {
             child: Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: Colors.grey.shade200,
+                color: AppPalette.of(context).bgPanel,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: SingleChildScrollView(
@@ -148,8 +150,8 @@ class _CustomKeyboardState extends State<CustomKeyboard> {
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           padding: EdgeInsets.zero,
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
+          backgroundColor: AppPalette.of(context).bgAlt,
+          foregroundColor: AppPalette.of(context).fg,
           minimumSize: Size(width, height),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(6),
@@ -171,7 +173,8 @@ class _CustomKeyboardState extends State<CustomKeyboard> {
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           padding: EdgeInsets.zero,
-          backgroundColor: isActive ? Colors.orange.shade300 : Colors.grey.shade300,
+          backgroundColor: isActive ? AppPalette.of(context).accent : AppPalette.of(context).border,
+          foregroundColor: isActive ? Colors.white : AppPalette.of(context).fg,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(6),
           ),
@@ -192,7 +195,7 @@ class _CustomKeyboardState extends State<CustomKeyboard> {
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           padding: EdgeInsets.zero,
-          backgroundColor: Colors.grey.shade300,
+          backgroundColor: AppPalette.of(context).border,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(6),
           ),
@@ -201,7 +204,7 @@ class _CustomKeyboardState extends State<CustomKeyboard> {
         child: Icon(
           icon,
           size: 20,
-          color: Colors.black87,
+          color: AppPalette.of(context).fg,
         ),
       ),
     );

@@ -3,21 +3,29 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'package:flutter/material.dart';
 
 import 'main.dart' show scaffoldMessengerKey;
+import 'theme.dart';
 
 class AppNotifier {
   static void showError(dynamic error, {String? fallbackMessage, BuildContext? context}) {
     final message = error.toString().isNotEmpty
         ? error.toString()
         : fallbackMessage ?? 'An unknown error occurred';
-    _showToast(message, Colors.redAccent, context: context);
+    _showToast(message, _palette(context).red, context: context);
   }
 
   static void showInfo(String message, {BuildContext? context}) {
-    _showToast(message, Colors.blueAccent, context: context);
+    _showToast(message, _palette(context).accent, context: context);
   }
 
   static void showSuccess(String message, {BuildContext? context}) {
-    _showToast(message, Colors.green, context: context);
+    _showToast(message, _palette(context).accentHover, context: context);
+  }
+
+  /// Palette of the running app. Falls back to the dark palette before the
+  /// app has built its first frame.
+  static AppPalette _palette(BuildContext? context) {
+    final ctx = context ?? scaffoldMessengerKey.currentContext;
+    return ctx != null ? AppPalette.of(ctx) : AppPalette.dark;
   }
 
   static void _showToast(String message, Color color, {BuildContext? context}) {
@@ -52,7 +60,7 @@ class AppNotifier {
       messenger.showSnackBar(
         SnackBar(
           content: Text(message,
-            style: TextStyle(color: Colors.white),
+            style: const TextStyle(color: Colors.white),
           ),
           backgroundColor: color,
           behavior: SnackBarBehavior.floating,

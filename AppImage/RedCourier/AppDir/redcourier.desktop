@@ -1,6 +1,8 @@
 [Desktop Entry]
 Type=Application
 Name=RedCourier
+Comment=End-to-end encrypted file delivery over Tor
 Exec=redcourier
 Icon=redcourier
-Categories=Network;Utility;
+Terminal=false
+Categories=Network;FileTransfer;

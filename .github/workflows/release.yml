@@ -1,0 +1,242 @@
+name: Release
+
+# Builds, signs and publishes a release for Linux/Tails, Android and Windows.
+# Triggered by pushing a version tag that matches pubspec.yaml:
+#   git tag v1.2.3 && git push origin v1.2.3
+#
+# Repository secrets (Settings > Secrets and variables > Actions > Secrets):
+#   RELEASE_SIGNING_KEY           Ed25519 private key (PEM) for all .sig files
+#   RELEASE_SIGNING_KEY_PASSWORD  only if that key is encrypted
+#   ANDROID_KEYSTORE_BASE64       base64 of the Android release keystore (.jks)
+#   ANDROID_KEYSTORE_PASSWORD
+#   ANDROID_KEY_ALIAS
+#   ANDROID_KEY_PASSWORD
+#
+# The release is created only after every platform built, so a failed build
+# never leaves a half-filled release behind.
+
+on:
+  push:
+    tags:
+      - 'v[0-9]*'
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: '3.47.7'
+  # Pinned AppImage tools; the checksums make a swapped download fail.
+  APPIMAGETOOL_URL: https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+  APPIMAGETOOL_SHA256: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
+  APPIMAGE_RUNTIME_URL: https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64
+  APPIMAGE_RUNTIME_SHA256: 2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
+
+jobs:
+
+  check:
+    name: Version and tests
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag must match pubspec.yaml
+        id: version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PUB="$(sed -n 's/^version:[[:space:]]*\([0-9][0-9.]*\).*/\1/p' pubspec.yaml | head -1)"
+          if [ "$TAG" != "$PUB" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match version $PUB in pubspec.yaml"
+            exit 1
+          fi
+          echo "version=$PUB" >> "$GITHUB_OUTPUT"
+
+      - name: Signing key is a secret
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          if [ -z "$RELEASE_SIGNING_KEY" ]; then
+            echo "::error::Secret RELEASE_SIGNING_KEY is missing. It must be a repository *secret*, not a variable."
+            exit 1
+          fi
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Tests
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+
+  linux:
+    name: Linux / Tails
+    needs: check
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev \
+            libstdc++-12-dev file pandoc zip openssl
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: AppImage tools (pinned)
+        run: |
+          mkdir -p "$RUNNER_TEMP/appimage"
+          cd "$RUNNER_TEMP/appimage"
+          curl -fsSL -o appimagetool "$APPIMAGETOOL_URL"
+          curl -fsSL -o runtime "$APPIMAGE_RUNTIME_URL"
+          echo "$APPIMAGETOOL_SHA256  appimagetool" | sha256sum -c -
+          echo "$APPIMAGE_RUNTIME_SHA256  runtime" | sha256sum -c -
+          chmod +x appimagetool
+          echo "APPIMAGETOOL=$PWD/appimagetool" >> "$GITHUB_ENV"
+          echo "APPIMAGE_RUNTIME=$PWD/runtime" >> "$GITHUB_ENV"
+
+      - name: Build, package and sign
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          RELEASE_SIGNING_KEY_PASSWORD: ${{ secrets.RELEASE_SIGNING_KEY_PASSWORD }}
+        run: ./package.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: |
+            dist/*.zip
+            dist/*.zip.sig
+            dist/*.AppImage
+            dist/*.AppImage.sig
+          if-no-files-found: error
+
+  android:
+    name: Android
+    needs: check
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Release keystore
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          # Never publish an APK signed with a throwaway debug key: updates
+          # would not install over it.
+          if [ -z "$KEYSTORE" ] || [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
+            echo "::error::Android signing secrets are missing (ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD)."
+            exit 1
+          fi
+          (umask 077
+           printf '%s' "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.jks"
+           {
+             echo "storeFile=$RUNNER_TEMP/release.jks"
+             echo "storePassword=$STORE_PASSWORD"
+             echo "keyAlias=$KEY_ALIAS"
+             echo "keyPassword=$KEY_PASSWORD"
+           } > android/key.properties)
+
+      - name: Build APK
+        run: |
+          flutter pub get
+          flutter build apk --release
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk "dist/RedCourier-${{ needs.check.outputs.version }}.apk"
+
+      - name: Remove keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks" android/key.properties
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: dist/*.apk
+          if-no-files-found: error
+
+  windows:
+    name: Windows
+    needs: check
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Build
+        run: |
+          flutter pub get
+          flutter build windows --release
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $name = "RedCourier-${{ needs.check.outputs.version }}-windows-x64"
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item -Recurse build\windows\x64\runner\Release "dist\$name"
+          Compress-Archive -Path "dist\$name" -DestinationPath "dist\$name.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/*.zip
+          if-no-files-found: error
+
+  release:
+    name: Sign and publish
+    needs: [check, linux, android, windows]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write  # create the GitHub release
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Sign APK and Windows zip
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          RELEASE_SIGNING_KEY_PASSWORD: ${{ secrets.RELEASE_SIGNING_KEY_PASSWORD }}
+        run: scripts/sign_files.sh dist/*.apk dist/*-windows-x64.zip
+
+      - name: Checksums
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: RedCourier ${{ needs.check.outputs.version }}
+          files: dist/*
+          fail_on_unmatched_files: true
