@@ -111,7 +111,7 @@ jobs:
           RELEASE_SIGNING_KEY_PASSWORD: ${{ secrets.RELEASE_SIGNING_KEY_PASSWORD }}
         run: ./package.sh
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux
           path: |
@@ -172,7 +172,7 @@ jobs:
         if: always()
         run: rm -f "$RUNNER_TEMP/release.jks" android/key.properties
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: android
           path: dist/*.apk
@@ -204,7 +204,7 @@ jobs:
           Copy-Item -Recurse build\windows\x64\runner\Release "dist\$name"
           Compress-Archive -Path "dist\$name" -DestinationPath "dist\$name.zip"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows
           path: dist/*.zip
