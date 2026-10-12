@@ -152,9 +152,6 @@ class Invite {
 
   static Invite parse(String text) {
     final t = text.replaceAll(RegExp(r'\s'), '');
-    if (t.startsWith('RCINVITE1:')) {
-      throw const FormatException('This invite is from an older version. Ask your admin for a new one.');
-    }
     if (!t.startsWith(prefix)) throw const FormatException('Not a RedCourier invite.');
     try {
       final json = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(t.substring(prefix.length)))));

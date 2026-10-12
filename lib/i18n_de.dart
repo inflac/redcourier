@@ -260,8 +260,6 @@ const germanTexts = <String, String>{
   'Missing sealed data.': 'Versiegelte Daten fehlen.',
   'Malformed sealed data.': 'Fehlerhafte versiegelte Daten.',
   'Not addressed to this key.': 'Nicht an diesen Schlüssel adressiert.',
-  'Not a RedCourier file.': 'Das ist keine RedCourier-Datei.',
-  'Invalid chunk size.': 'Ungültige Blockgröße.',
   'File is truncated.': 'Die Datei ist unvollständig.',
   'The file was modified or the key is wrong.': 'Die Datei wurde verändert oder der Schlüssel ist falsch.',
   // ── Groups on this device ──
@@ -399,8 +397,6 @@ const germanTexts = <String, String>{
       'Die Kamera ist nicht verfügbar. Erlaube den Kamerazugriff in den Systemeinstellungen oder gib den Code von Hand ein.',
   'The group does not match the fingerprint you entered. Do not join. Someone may have changed the invite or the server. Contact your admin over another channel.\nFound: {fp}':
       'Die Gruppe passt nicht zum eingegebenen Fingerprint. Tritt nicht bei. Möglicherweise hat jemand die Einladung oder den Server verändert. Kontaktiere deinen Admin über einen anderen Kanal.\nGefunden: {fp}',
-  'This invite is from an older version. Ask your admin for a new one.':
-      'Diese Einladung stammt aus einer älteren Version. Bitte deinen Admin um eine neue.',
   'This is not a complete group fingerprint (64 characters 0-9 and A-F).':
       'Das ist kein vollständiger Gruppen-Fingerprint (64 Zeichen 0-9 und A-F).',
   'While a group is unlocked, RedCourier syncs every {n} minutes and shows a notification without sender or group name. When the app is closed or locked, nothing is checked.':
@@ -486,10 +482,10 @@ const germanTexts = <String, String>{
       'Die verschlüsselte Kopie wurde von diesem Gerät gelöscht.',
   'This deletes the encrypted copies of all downloaded deliveries of this group from this device. Files you saved to a folder are not touched.':
       'Das löscht die verschlüsselten Kopien aller heruntergeladenen Lieferungen dieser Gruppe von diesem Gerät. Dateien, die du in einem Ordner gespeichert hast, bleiben unberührt.',
-  'This delivery was sent with an older version of RedCourier. Ask the sender to send it again.':
-      'Diese Lieferung wurde mit einer älteren RedCourier-Version gesendet. Bitte den Absender, sie noch einmal zu senden.',
   '{name} changed while it was being sent.':
       '{name} hat sich während des Sendens verändert.',
   'Stored unencrypted on this device (folder name, group list). Choose a name that reveals nothing sensitive.':
       'Wird unverschlüsselt auf diesem Gerät gespeichert (Ordnername, Gruppenliste). Wähle einen Namen, der nichts Sensibles verrät.',
+  'This delivery uses a format this version cannot read.':
+      'Diese Lieferung hat ein Format, das diese Version nicht lesen kann.',
 };

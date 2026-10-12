@@ -125,8 +125,7 @@ class DeliveryPayload {
   final Uint8List key;
   final List<HostedPart> parts;
 
-  /// Delivery.payloadFormat; deliveries of earlier versions (ZIP inside the
-  /// encryption) cannot be saved without a plaintext copy and are refused.
+  /// Delivery.payloadFormat.
   final String format;
   DeliveryPayload(this.id, this.key, this.parts, [this.format = Delivery.payloadFormat]);
 }
@@ -651,7 +650,7 @@ class GroupSession {
         expires: DateTime.fromMillisecondsSinceEpoch((raw['expires'] as int) * 1000),
         note: data['note'] as String? ?? '',
         files: files,
-        payload: DeliveryPayload(payloadId, payloadKey, parts, payloadJson['format'] as String? ?? 'zip'),
+        payload: DeliveryPayload(payloadId, payloadKey, parts, payloadJson['format'] as String? ?? ''),
         to: to,
         sentByMe: sender == myId,
         forMe: to.contains(myId),
@@ -694,9 +693,6 @@ class GroupSession {
           final out = draft.doc;
           if (draft.usersChanged) {
             if (draft.adminSeed == null) throw SyncException('Only admins can change members.');
-            // Earlier versions stored the WebDAV credentials here; they are
-            // entered on each device now and removed from the shared file.
-            draft.users.remove('sync_config');
             draft.users['version'] = v.usersVersion + 1;
             out['users_sig'] = await sign(draft.adminSeed!, _usersMessage(out));
           }
@@ -972,9 +968,8 @@ class GroupSession {
   /// [deleteDownload] or until the delivery is removed or expires.
   Future<String> saveFiles(Entry entry, Directory targetDir,
       {void Function(String template, Map<String, Object?> args, double? progress)? onProgress}) async {
-    if (!Delivery.readableFormats.contains(entry.payload.format)) {
-      throw SyncException('This delivery was sent with an older version of RedCourier. Ask the sender to '
-          'send it again.');
+    if (entry.payload.format != Delivery.payloadFormat) {
+      throw SyncException('This delivery uses a format this version cannot read.');
     }
     if (!isDownloaded(entry)) throw SyncException('Download the delivery first.');
     final blob = File(p.join(_partialFor(entry).path, 'payload.rcb'));
@@ -987,8 +982,7 @@ class GroupSession {
     for (var i = 2; await target.exists(); i++) {
       target = Directory(p.join(targetDir.path, '$folderName ($i)'));
     }
-    await Delivery.unpackEncrypted(blob.path, entry.payload.key, entry.payload.id, target.path,
-        format: entry.payload.format);
+    await Delivery.unpackEncrypted(blob.path, entry.payload.key, entry.payload.id, target.path);
     return target.path;
   }
 

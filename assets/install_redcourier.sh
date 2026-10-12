@@ -187,7 +187,7 @@ case "$choice" in
 
     rm -rf "$INSTALL_DIR/app" "$INSTALL_DIR/.app-previous" && echo "  Removed: $INSTALL_DIR/app"
     for f in "$INSTALL_DIR/icon.png" "$INSTALL_DIR/$SCRIPT_NAME" "$INSTALL_DIR/README.html" \
-             "$INSTALL_DIR/WHITEPAPER.html" "$INSTALL_DIR/settings.env" "$PINNED_KEY"; do
+             "$INSTALL_DIR/WHITEPAPER.html" "$PINNED_KEY"; do
       [ -f "$f" ] && rm -f "$f" && echo "  Removed: $f"
     done
     if $delete_data; then
@@ -254,7 +254,6 @@ fi
 
 # Received deliveries stay encrypted in the data folder; the user picks a
 # folder (for example a VeraCrypt volume) for each delivery in the app.
-rm -f "$INSTALL_DIR/settings.env"  # used by earlier versions
 
 echo "[*] Creating menu entry..."
 mkdir -p "$SESSION_APPS"

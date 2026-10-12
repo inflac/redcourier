@@ -22,23 +22,20 @@ import 'messages.dart';
 /// the folder the user chooses. The hosts only ever see encrypted data in
 /// ZIPs with random names.
 ///
-/// Container inside the encryption (format "rcp1"):
+/// Container inside the encryption (payload format "rcp2"):
 ///   "RCP1" | file count u32 | per file: name length u16 | UTF-8 name |
 ///   size u64 | bytes
 class Delivery {
   static const defaultPartSize = 256 * 1024 * 1024;
 
-  /// Current payload format: the container below inside a blob without any
-  /// recognizable header. 'rcp1' (same container, blob with "RCB1" header)
-  /// is still read.
+  /// Payload format, recorded in the encrypted delivery entry.
   static const payloadFormat = 'rcp2';
-  static const readableFormats = {'rcp1', 'rcp2'};
   static const _containerMagic = [0x52, 0x43, 0x50, 0x31]; // "RCP1"
   static const maxFileNameBytes = 1024;
 
   /// Encrypts [paths] into the blob [blobPath] without any plaintext copy.
   static Future<void> packEncrypted(List<String> paths, String blobPath, Uint8List key, String payloadId) =>
-      Isolate.run(() => BlobCrypto.encryptStream(_container(paths), blobPath, key, payloadId, header: false));
+      Isolate.run(() => BlobCrypto.encryptStream(_container(paths), blobPath, key, payloadId));
 
   static Stream<List<int>> _container(List<String> paths) async* {
     yield [..._containerMagic, ..._uint(paths.length, 4)];
@@ -65,17 +62,15 @@ class Delivery {
   /// Decrypts the blob straight into [targetDir] (created if needed) and
   /// returns the written files. Names are made safe and unique. If the blob
   /// turns out to be damaged or forged, everything written is deleted again.
-  static Future<List<String>> unpackEncrypted(String blobPath, Uint8List key, String payloadId, String targetDir,
-          {String format = payloadFormat}) =>
-      Isolate.run(() => _unpack(blobPath, key, payloadId, targetDir, format));
+  static Future<List<String>> unpackEncrypted(String blobPath, Uint8List key, String payloadId, String targetDir) =>
+      Isolate.run(() => _unpack(blobPath, key, payloadId, targetDir));
 
-  static Future<List<String>> _unpack(
-      String blobPath, Uint8List key, String payloadId, String targetDir, String format) async {
+  static Future<List<String>> _unpack(String blobPath, Uint8List key, String payloadId, String targetDir) async {
     final dir = Directory(targetDir);
     final createdDir = !await dir.exists();
     await dir.create(recursive: true);
     final written = <String>[];
-    final reader = _Reader(BlobCrypto.decryptStream(blobPath, key, payloadId, header: format == 'rcp1'));
+    final reader = _Reader(BlobCrypto.decryptStream(blobPath, key, payloadId));
     try {
       final magic = await reader.read(4);
       for (var i = 0; i < 4; i++) {
@@ -157,7 +152,7 @@ class Delivery {
         final input = InputFileStream(partZip);
         try {
           final archive = ZipDecoder().decodeStream(input);
-          // Exactly one file, whatever its name (earlier versions: "redcourier.part").
+          // Exactly one file; its name is random.
           final entry = archive.files.where((f) => f.isFile).toList();
           if (entry.length != 1) throw AppException('A downloaded part is not a RedCourier part.');
           final tmp = '$blobPath.piece';

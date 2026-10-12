@@ -71,7 +71,6 @@ class AppController extends ChangeNotifier {
       if (await tempDir.exists()) await tempDir.delete(recursive: true);
     } catch (_) {}
     await tempDir.create(recursive: true);
-    await _migrate();
     await _loadGroups();
     defaultGroup = Prefs.getString(_defaultGroupKey);
     if (groups.isEmpty) {
@@ -79,21 +78,6 @@ class AppController extends ChangeNotifier {
       notifyListeners();
     } else {
       selectGroup(groups.contains(defaultGroup) ? defaultGroup! : groups.first);
-    }
-  }
-
-  /// Earlier development versions used a single vault and then "profiles".
-  Future<void> _migrate() async {
-    final oldProfiles = Directory(p.join(dataDir.path, 'profiles'));
-    if (await oldProfiles.exists() && !await _groupsDir.exists()) {
-      await oldProfiles.rename(_groupsDir.path);
-    }
-    if (await Vault.exists(dataDir)) {
-      final target = _groupDir('Default');
-      await target.create(recursive: true);
-      for (final f in [File(p.join(dataDir.path, 'vault.json')), Vault.cacheFile(dataDir)]) {
-        if (await f.exists()) await f.rename(p.join(target.path, p.basename(f.path)));
-      }
     }
   }
 

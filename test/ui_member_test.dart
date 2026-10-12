@@ -57,9 +57,9 @@ void main() {
     expect(find.text('Please enter a full URL.'), findsOneWidget);
 
     await t.runAsync(() => a.run((s) => s.addMember(b.identity!.joinRequest)));
-    await enter(t, 'Invite (RCINVITE2:…)', 'RCINVITE1:old');
+    await enter(t, 'Invite (RCINVITE2:…)', 'not an invite');
     await tapText(t, 'Join group');
-    expect(find.textContaining('older version'), findsOneWidget);
+    expect(find.text('Not a RedCourier invite.'), findsOneWidget);
     await enter(t, 'Invite (RCINVITE2:…)', Invite(work).encode());
     await tapText(t, 'Join group');
     expect(find.text('Enter the group fingerprint your admin sent you over a second channel.'), findsOneWidget);

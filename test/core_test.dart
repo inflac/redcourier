@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:redcourier/core/blob_crypto.dart';
@@ -173,28 +172,26 @@ void main() {
   });
 
   test('blob encryption round trip, chunking and tamper detection', () async {
+    Future<List<int>> decrypt(String path, Uint8List key, String name) async =>
+        (await BlobCrypto.decryptStream(path, key, name, chunkSize: 4096).toList()).expand((c) => c).toList();
+
     for (final size in [0, 1, 4096, 4096 * 3, 4096 * 3 + 7]) {
       final src = await writeFile('in_$size', size);
       final enc = p.join(tmp.path, 'enc_$size');
-      final out = p.join(tmp.path, 'out_$size');
       final key = randomBytes(32);
-      await BlobCrypto.encryptFile(src, enc, key, 'b.rcb', chunkSize: 4096);
-      await BlobCrypto.decryptFile(enc, out, key, 'b.rcb');
-      expect(await File(out).readAsBytes(), await File(src).readAsBytes());
+      await BlobCrypto.encryptStream(File(src).openRead(), enc, key, 'b.rcb', chunkSize: 4096);
+      expect(await decrypt(enc, key, 'b.rcb'), await File(src).readAsBytes());
       // A different blob name must fail (no swapping of blobs).
-      await expectLater(BlobCrypto.decryptFile(enc, '$out.x', key, 'c.rcb'),
-          throwsA(isA<CryptoException>()));
-      expect(File('$out.x').existsSync(), isFalse);
+      await expectLater(decrypt(enc, key, 'c.rcb'), throwsA(isA<CryptoException>()));
     }
     // Truncation: drop the final chunk.
     final src = await writeFile('trunc', 4096 * 2 + 10);
     final enc = p.join(tmp.path, 'trunc.enc');
     final key = randomBytes(32);
-    await BlobCrypto.encryptFile(src, enc, key, 'b.rcb', chunkSize: 4096);
+    await BlobCrypto.encryptStream(File(src).openRead(), enc, key, 'b.rcb', chunkSize: 4096);
     final bytes = await File(enc).readAsBytes();
-    await File(enc).writeAsBytes(bytes.sublist(0, 16 + 2 * (4096 + 16)));
-    await expectLater(BlobCrypto.decryptFile(enc, '${enc}_out', key, 'b.rcb'),
-        throwsA(isA<CryptoException>()));
+    await File(enc).writeAsBytes(bytes.sublist(0, BlobCrypto.prefixLength + 2 * (4096 + 16)));
+    await expectLater(decrypt(enc, key, 'b.rcb'), throwsA(isA<CryptoException>()));
   });
 
   test('join request and invite encode/decode', () async {
@@ -205,7 +202,7 @@ void main() {
     final inv = Invite.parse(Invite(webdav).encode());
     expect(inv.webdav.url, webdav.url);
     expect(inv.encode(), isNot(contains('fingerprint')));
-    expect(() => Invite.parse('RCINVITE1:abc'), throwsFormatException);
+    expect(() => Invite.parse('RCINVITE9:abc'), throwsFormatException);
     expect(() => JoinRequest.parse('nonsense'), throwsFormatException);
   });
 
@@ -524,27 +521,6 @@ void main() {
     await expectLater(b.changeWebDav(webdav, store), throwsA(isA<NotMemberException>()));
   });
 
-  test('credentials stored by earlier versions are removed on the next change', () async {
-    final store = MemoryStore();
-    final alice = await Identity.generate('alice');
-    final a = await createGroup(alice, store);
-    final doc = jsonDecode(utf8.decode(store.sync!)) as Map<String, dynamic>;
-    (doc['users'] as Map)['sync_config'] = 'old encrypted credentials';
-    // Re-sign as the admin would have (old versions signed this field).
-    final seed = await (await alice.sealKeyPair())
-        .open((doc['users']['members'] as Map)[alice.userId]['admin_sign_key'], 'admin-sign-key');
-    doc['users_sig'] = await sign(seed, canonicalBytes('redcourier/users/v1', {
-      'format': doc['format'],
-      'format_version': doc['format_version'],
-      'users': doc['users'],
-    }));
-    await store.putSync(Uint8List.fromList(utf8.encode(jsonEncode(doc))));
-    await a.sync();
-    await a.addMember((await Identity.generate('bob')).joinRequest);
-    final after = jsonDecode(utf8.decode(store.sync!)) as Map<String, dynamic>;
-    expect((after['users'] as Map).containsKey('sync_config'), isFalse);
-  });
-
   test('vault round trip and wrong password', () async {
     final id = await Identity.generate('alice');
     final dir = Directory(p.join(tmp.path, 'vault'));
@@ -585,26 +561,6 @@ void main() {
       final zipText = latin1.decode(File(part).readAsBytesSync());
       expect(zipText.toLowerCase(), isNot(contains('redcourier')));
       expect(p.basename(part), matches(RegExp(r'^[0-9a-f]{32}\.zip$')));
-
-      // Parts from earlier versions (entry "redcourier.part") are still read.
-      final legacy = File(p.join(work.path, 'legacy.zip'));
-      final archive = Archive()..add(ArchiveFile.bytes('redcourier.part', [1, 2, 3]));
-      legacy.writeAsBytesSync(ZipEncoder().encode(archive));
-      final out = p.join(work.path, 'joined');
-      await Delivery.appendPart(legacy.path, out);
-      expect(File(out).readAsBytesSync(), [1, 2, 3]);
-    });
-
-    test('deliveries in the previous format (rcp1, with header) still open', () async {
-      final blob = p.join(work.path, 'payload.rcb');
-      final paths = files();
-      await Delivery.packEncrypted(paths, blob, key, 'pid');
-      // Re-encrypt the same container the way 0.0.4 did.
-      final old = p.join(work.path, 'old.rcb');
-      await BlobCrypto.encryptStream(BlobCrypto.decryptStream(blob, key, 'pid', header: false), old, key, 'pid');
-      expect(String.fromCharCodes(File(old).readAsBytesSync().sublist(0, 4)), 'RCB1');
-      final written = await Delivery.unpackEncrypted(old, key, 'pid', target.path, format: 'rcp1');
-      expect(File(written[1]).readAsStringSync(), 'secret plan');
     });
 
     test('packing writes only the encrypted blob, saving writes only into the target', () async {
@@ -636,7 +592,7 @@ void main() {
       expect(target.existsSync(), isFalse);
 
       // Cut off after the first chunk (truncation).
-      File(blob).writeAsBytesSync(bytes.sublist(0, BlobCrypto.headerLength + BlobCrypto.defaultChunkSize + 16));
+      File(blob).writeAsBytesSync(bytes.sublist(0, BlobCrypto.prefixLength + BlobCrypto.defaultChunkSize + 16));
       await expectLater(Delivery.unpackEncrypted(blob, key, 'pid', target.path), throwsA(isA<CryptoException>()));
       expect(target.existsSync(), isFalse);
 
@@ -685,10 +641,6 @@ void main() {
       expect(b.isDownloaded(entry), isFalse);
     });
 
-    test('deliveries of earlier versions (ZIP inside) are not unpacked', () {
-      final legacy = DeliveryPayload('a' * 32, randomBytes(32), [], 'zip');
-      expect(legacy.format, isNot(Delivery.payloadFormat));
-    });
   });
 
   test('file names from other users are sanitized', () {

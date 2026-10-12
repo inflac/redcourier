@@ -159,15 +159,4 @@ void main() {
     expect(c.lastCreateFailure, isNull);
   });
 
-  test('old layouts are migrated into groups/', () async {
-    final dir = Directory(p.join(tmp.path, 'old'))..createSync();
-    final first = testController(dav, dir);
-    await first.init(dir);
-    await first.addGroup('Default', 'alice', pw);
-    // Move the group back to where the first versions kept it ("profiles").
-    await Directory(p.join(dir.path, 'groups')).rename(p.join(dir.path, 'profiles'));
-    final c = testController(dav, dir);
-    await c.init(dir);
-    expect(c.groups, ['Default']);
-  });
 }

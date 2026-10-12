@@ -124,7 +124,7 @@ example `entry-key/<entry_id>`, so values cannot be moved to another place.
 
 ```text
 files ──container + encrypt (streamed)──▶ payload.rcb ──split──▶ part_1 … part_n
-part_i ──wrap in a ZIP (one entry "redcourier.part")──▶ <random>.zip ──▶ upload
+part_i ──wrap in a ZIP (one entry with a random name)──▶ <random>.zip ──▶ upload
 ```
 
 Inside the encryption the files are stored in a simple container: `"RCP1"`,
@@ -145,8 +145,6 @@ The final flag detects truncation, the payload id in the associated data stops
 one payload from being swapped for another. The blob has no format marker or
 plaintext header, so it cannot be told apart from random data; its format
 (payload format `rcp2`) is recorded in the encrypted delivery entry.
-Deliveries of version 0.0.4 (`rcp1`, the same container in a blob starting with
-`"RCB1"` and the chunk size) are still read.
 
 Large payloads are split into parts of at most 256 MiB. Each part is cut to
 the limit of the host that receives it, and part *i* goes to the *i*-th host in
@@ -194,9 +192,7 @@ stream straight into that folder, and nothing is written anywhere else. Every
 be damaged or forged (a later chunk fails, or it is truncated), the files
 written so far are deleted again. The encrypted copy is removed with *Delete
 from this device*, from the settings, or automatically when the delivery is
-deleted, hidden or expires. Deliveries sent by earlier versions (with a ZIP
-inside the encryption) are refused instead of being unpacked through a
-plaintext temporary file.
+deleted, hidden or expires.
 
 What the app cannot control: files the user opens afterwards may leave traces
 (thumbnails, recent-file lists, editor backups), and the operating system may
@@ -355,9 +351,7 @@ offers the same when the login fails. New data is saved only after the app
 reached the folder through Tor and found this very group there: valid
 signatures, the admin key this device trusts (after an admin change, the new
 fingerprint from an admin), and the user still a member. A typo or a foreign
-folder therefore cannot lock a device out. Files written by earlier versions,
-which kept the credentials encrypted in `sync.json`, lose them with the next
-change of the member list.
+folder therefore cannot lock a device out.
 
 ## Local storage
 
