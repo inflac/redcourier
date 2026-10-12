@@ -142,7 +142,6 @@ const germanTexts = <String, String>{
   'User id {id} · {role}': 'Benutzer-ID {id} · {role}',
   'Group fingerprint': 'Gruppen-Fingerprint',
   'New group fingerprint': 'Neuer Gruppen-Fingerprint',
-  'My join request': 'Meine Beitrittsanfrage',
   'Invite': 'Einladung',
   'Members: {n}': 'Mitglieder: {n}',
   'Add member': 'Mitglied hinzufügen',

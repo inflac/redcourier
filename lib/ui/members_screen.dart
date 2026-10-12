@@ -175,12 +175,6 @@ class _MembersScreenState extends State<MembersScreen> {
                   label: Text(tr('Group fingerprint')),
                   onPressed: _showFingerprint,
                 ),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.badge_outlined),
-                  label: Text(tr('My join request')),
-                  onPressed: () => showCodeDialog(context,
-                      title: tr('Your join request'), code: me.joinRequest.encode(), showQr: false),
-                ),
                 if (_s.isAdmin)
                   OutlinedButton.icon(
                     icon: const Icon(Icons.mail_lock_outlined),
