@@ -1,0 +1,70 @@
+name: Bug Report
+description: Report a bug in RedCourier
+title: "[BUG] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        Issues are public: do not post invites, fingerprints, `sync.json` or WebDAV details.
+        Security problems go to [private reporting](https://github.com/inflac/redcourier/security/advisories/new).
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+    validations:
+      required: false
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: e.g. 0.0.1
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Tails
+        - Linux
+        - Windows
+        - Android
+    validations:
+      required: true
+  - type: dropdown
+    id: tor
+    attributes:
+      label: Tor Setup
+      options:
+        - Tails (built in)
+        - Tor Browser
+        - Tor service
+        - Orbot
+        - torsocks
+    validations:
+      required: false
+  - type: textarea
+    id: error
+    attributes:
+      label: Error Message
+      description: Exact text shown by the app, with personal data removed.
+      render: text
+    validations:
+      required: false

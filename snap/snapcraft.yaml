@@ -1,6 +1,6 @@
 name: redcourier
 base: core22
-version: '0.1.0'
+version: '0.0.1'
 summary: End-to-end encrypted file delivery for small groups, over Tor
 description: |
   RedCourier sends end-to-end encrypted files to the members of a group.
@@ -9,7 +9,7 @@ description: |
   traffic goes through Tor.
 title: RedCourier
 icon: snap/gui/redcourier.png
-grade: stable
+grade: devel
 confinement: strict
 
 apps:

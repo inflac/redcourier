@@ -1,0 +1,8 @@
+# Keeps the GitHub Actions of the release workflow up to date. The release
+# job holds the signing secrets, so action updates arrive as reviewable PRs.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
