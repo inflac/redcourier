@@ -67,3 +67,6 @@ key.properties
 
 # Test coverage output
 /coverage/
+
+# Developer specific files
+dev-notes.md
