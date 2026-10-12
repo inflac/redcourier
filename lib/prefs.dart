@@ -47,8 +47,26 @@ class Prefs {
     }
     final file = _file;
     if (file == null) return;
-    final tmp = File('${file.path}.tmp');
-    await tmp.writeAsString(const JsonEncoder.withIndent('  ').convert(_data), flush: true);
-    await tmp.rename(file.path);
+    // One write at a time: parallel writes would share the .tmp file, and on
+    // Windows the second rename fails while the first holds it.
+    final previous = _writing;
+    final write = () async {
+      if (previous != null) {
+        try {
+          await previous;
+        } catch (_) {}
+      }
+      final tmp = File('${file.path}.tmp');
+      await tmp.writeAsString(const JsonEncoder.withIndent('  ').convert(_data), flush: true);
+      await tmp.rename(file.path);
+    }();
+    _writing = write;
+    try {
+      await write;
+    } finally {
+      if (identical(_writing, write)) _writing = null;
+    }
   }
+
+  static Future<void>? _writing;
 }

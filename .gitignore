@@ -64,3 +64,6 @@ AppImage/RedCourier/AppDir/usr/bin/*
 *.jks
 *.keystore
 key.properties
+
+# Test coverage output
+/coverage/

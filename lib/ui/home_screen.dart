@@ -69,6 +69,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _sync({bool quiet = false, String? fingerprint}) async {
     if (_syncing || widget.app.session == null) return;
     setState(() => _syncing = true);
+    TrustException? trust;
     try {
       final r = await widget.app.sync(confirmedFingerprint: fingerprint);
       if (!mounted) return;
@@ -89,7 +90,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } on TrustException catch (e) {
       if (!mounted) return;
       setState(() => _problem = errorMessage(e));
-      await _askFingerprint(e);
+      trust = e;
     } on NotMemberException catch (e) {
       if (mounted) {
         setState(() {
@@ -102,6 +103,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } finally {
       if (mounted) setState(() => _syncing = false);
     }
+    // Ask only after this sync has ended: confirming starts a new sync, which
+    // would otherwise be skipped as "already running".
+    if (trust != null && mounted) await _askFingerprint(trust);
   }
 
   Future<void> _askFingerprint(TrustException e) async {

@@ -67,11 +67,12 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Tests
+      - name: Tests and coverage (minimum 80 %)
         run: |
           flutter pub get
           flutter analyze
-          flutter test
+          flutter test --coverage
+          dart run tool/coverage.dart --min 80
 
   linux:
     name: Linux / Tails

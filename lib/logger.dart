@@ -12,7 +12,7 @@ import 'package:flutter/foundation.dart';
 /// Safe for production: logs are suppressed when disabled.
 class AppLogger {
   static bool _enabled = !kReleaseMode;
-  static const String _tag = '[FileCryptoManager]';
+  static const String _tag = '[RedCourier]';
 
   /// Initialize the logger (e.g. at app startup).
   static void init({required bool isEnabled}) {

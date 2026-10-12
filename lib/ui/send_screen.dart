@@ -15,7 +15,10 @@ import 'widgets.dart';
 
 class SendScreen extends StatefulWidget {
   final AppController app;
-  const SendScreen({super.key, required this.app});
+
+  /// Files to start with (the file picker adds more).
+  final List<String> initialPaths;
+  const SendScreen({super.key, required this.app, this.initialPaths = const []});
 
   @override
   State<SendScreen> createState() => _SendScreenState();
@@ -26,7 +29,7 @@ class _SendScreenState extends State<SendScreen> {
   static const _allLifetimes = [1, 3, 6];
 
   final Set<String> _recipients = {};
-  final List<String> _paths = [];
+  late final List<String> _paths = [...widget.initialPaths];
   final _note = TextEditingController();
   final _filter = TextEditingController();
   int _lifetime = 3;

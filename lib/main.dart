@@ -20,6 +20,8 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 /// Lock the app after it has been in the background this long.
 const autoLockAfter = Duration(minutes: 5);
 
+// coverage:ignore-start
+// The entry point needs the real platform plugins; App below is tested.
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Before anything else: no connection may bypass Tor.
@@ -37,6 +39,7 @@ void main() async {
   // Like CalSec: check for updates once at start (installed versions only).
   await runStartupUpdateCheck(navigatorKey.currentState);
 }
+// coverage:ignore-end
 
 class App extends StatefulWidget {
   final AppController controller;

@@ -34,6 +34,8 @@ class ScanQrButton extends StatelessWidget {
       );
 }
 
+// coverage:ignore-start
+// Needs a camera; scanning only exists on Android devices.
 class _QrScanPage extends StatefulWidget {
   final String title;
   const _QrScanPage({required this.title});
@@ -81,3 +83,4 @@ class _QrScanPageState extends State<_QrScanPage> {
     );
   }
 }
+// coverage:ignore-end

@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,7 +9,8 @@ import '../i18n.dart';
 import '../keyboard.dart';
 import '../theme.dart';
 
-bool get isMobile => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+bool get isMobile =>
+    defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS;
 
 /// Text field that never uses the system keyboard on phones.
 ///

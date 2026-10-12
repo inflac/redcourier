@@ -27,11 +27,15 @@ class UpdatePrefs {
 }
 
 /// Self-update is only possible for installations made by the Tails installer.
-final String? updateInstallDir = installedDir();
+/// (Not final so tests can point it at a folder.)
+String? updateInstallDir = installedDir();
 bool get updatesAvailable => updateInstallDir != null;
 
 /// An update found in "notify" mode, shown as a banner.
 final pendingUpdate = ValueNotifier<UpdateInfo?>(null);
+
+/// Creates the updater; tests replace it to talk to a local server.
+Future<Updater> Function() updaterFactory = _updater;
 
 Future<Updater> _updater() async {
   final info = await PackageInfo.fromPlatform();
@@ -55,7 +59,7 @@ Future<void> runStartupUpdateCheck(NavigatorState? navigator) async {
     return;
   }
   try {
-    pendingUpdate.value = await (await _updater()).check();
+    pendingUpdate.value = await (await updaterFactory()).check();
   } catch (_) {
     // Notify mode stays silent on network errors.
   }
@@ -105,7 +109,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
     Directory? work;
     try {
       if (installDir == null) throw UpdateException('Updates are only available for installed versions.');
-      final updater = await _updater();
+      final updater = await updaterFactory();
       var info = _info;
       if (info == null) {
         info = await updater.check();
@@ -250,6 +254,8 @@ class _UpdateSettingsCardState extends State<UpdateSettingsCard> {
         RadioGroup<bool>(
           groupValue: official,
           onChanged: (v) async {
+            // An empty URL would count as "official" again, so start with https://.
+            if (v != true && _custom.text.trim().isEmpty) _custom.text = 'https://';
             await UpdatePrefs.setChannel(v == true ? 'official' : _custom.text);
             setState(() {});
           },

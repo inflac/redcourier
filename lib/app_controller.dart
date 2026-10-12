@@ -27,6 +27,14 @@ class AppController extends ChangeNotifier {
   static const _folderFile = 'folder.txt';
   static final _nameRe = RegExp(r'^[\p{L}\p{N}][\p{L}\p{N}_ .\-]{0,39}$', unicode: true);
 
+  /// The app uses WebDAV, the public file hosts and the system download
+  /// folder, all through Tor. Tests pass in-memory replacements.
+  AppController({this.storeFactory, this.hostingFactory, this.downloadBase});
+
+  final RemoteStore Function(WebDavConfig Function() config)? storeFactory;
+  final Hosting Function(String group)? hostingFactory;
+  final Directory? downloadBase;
+
   AppPhase phase = AppPhase.loading;
   late Directory dataDir;
 
@@ -105,10 +113,10 @@ class AppController extends ChangeNotifier {
   String? validateGroupName(String name) {
     final n = name.trim();
     if (!_nameRe.hasMatch(n) || n.endsWith('.')) {
-      return 'Use letters, digits, spaces, dots, dashes or underscores, starting with a letter or digit.';  // i18n
+      return 'Use letters, digits, spaces, dots, dashes or underscores, starting with a letter or digit.'; // i18n
     }
     if (groups.any((x) => x.toLowerCase() == n.toLowerCase())) {
-      return 'A group with this name already exists on this device.';  // i18n
+      return 'A group with this name already exists on this device.'; // i18n
     }
     return null;
   }
@@ -150,16 +158,17 @@ class AppController extends ChangeNotifier {
   /// File hosts for deliveries, reached through Tor on circuits separate
   /// from the sync traffic.
   Hosting get _hosting =>
+      hostingFactory?.call(groupName!) ??
       Hosting(
           defaultHosts(
               tcp: (host, port, data) =>
                   TorNetwork.tcpExchange(host, port, data, isolation: '$groupName/files')),
           () => TorNetwork.createHttpClient(isolation: '$groupName/files'));
 
-  RemoteStore _store(WebDavConfig initial) => WebDavStore(
-        () => _data?.group?.webdav ?? initial,
-        clientFactory: TorNetwork.createHttpClient,
-      );
+  RemoteStore _store(WebDavConfig initial) {
+    WebDavConfig config() => _data?.group?.webdav ?? initial;
+    return storeFactory?.call(config) ?? WebDavStore(config, clientFactory: TorNetwork.createHttpClient);
+  }
 
   Future<void> _persist() async {
     final vault = _vault;
@@ -238,8 +247,10 @@ class AppController extends ChangeNotifier {
       if (g == groupName) continue;
       final f = File(p.join(_groupDir(g).path, _folderFile));
       if (await f.exists() && (await f.readAsString()).trim() == hash) {
-        throw AppException('The group "{name}" on this device already uses this WebDAV folder. '
-            'Every group needs its own folder.', {'name': g});
+        throw AppException(
+            'The group "{name}" on this device already uses this WebDAV folder. '
+            'Every group needs its own folder.',
+            {'name': g});
       }
     }
   }
@@ -350,6 +361,7 @@ class AppController extends ChangeNotifier {
   /// `REDCOURIER_DOWNLOAD_DIR` overrides the base folder (Tails installer).
   Future<Directory> downloadDir() async {
     final sub = groupName ?? 'Default';
+    if (downloadBase != null) return Directory(p.join(downloadBase!.path, sub));
     final override = Platform.environment['REDCOURIER_DOWNLOAD_DIR'];
     if (override != null && override.trim().isNotEmpty) {
       return Directory(p.join(override.trim(), sub));
