@@ -363,7 +363,9 @@ change of the member list.
 
 Private keys, the WebDAV configuration, the pinned admin key and the last seen
 versions are stored in `groups/<name>/vault.json` in the app support folder,
-encrypted with the group's password. Each local group has its own identity,
+encrypted with the group's password. The local group name is the folder name
+and shown before unlocking, so it is not encrypted; the app asks for a name
+that reveals nothing sensitive. Each local group has its own identity,
 so two local groups may even be members of the same group (for example to
 test with two identities on one device). Non-secret settings (language, theme, Tor port) are kept in `settings.json`.
 

@@ -490,4 +490,6 @@ const germanTexts = <String, String>{
       'Diese Lieferung wurde mit einer älteren RedCourier-Version gesendet. Bitte den Absender, sie noch einmal zu senden.',
   '{name} changed while it was being sent.':
       '{name} hat sich während des Sendens verändert.',
+  'Stored unencrypted on this device (folder name, group list). Choose a name that reveals nothing sensitive.':
+      'Wird unverschlüsselt auf diesem Gerät gespeichert (Ordnername, Gruppenliste). Wähle einen Namen, der nichts Sensibles verrät.',
 };

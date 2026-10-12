@@ -234,6 +234,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             controller: _name,
             label: tr('Group name (only on this device)'),
             hint: tr('e.g. Work or Family')),
+        Padding(
+          padding: const EdgeInsets.only(top: 4, left: 12),
+          child: Text(
+              tr('Stored unencrypted on this device (folder name, group list). Choose a name that '
+                  'reveals nothing sensitive.'),
+              style: TextStyle(color: AppPalette.of(context).fgDim, fontSize: 12)),
+        ),
         const SizedBox(height: 12),
         SecureTextField(controller: _identifier, label: tr('Identifier (name or handle)')),
         const SizedBox(height: 12),
