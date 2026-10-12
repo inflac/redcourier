@@ -17,6 +17,9 @@
         tools:replace="android:required"/>
     <!-- Local notifications about new deliveries. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- In-app updates for APKs from GitHub (off for F-Droid and store installs).
+         Android still asks the user to confirm every installation. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
 
 
     <application
