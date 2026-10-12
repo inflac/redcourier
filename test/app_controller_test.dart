@@ -105,8 +105,20 @@ void main() {
     expect(b.phase, AppPhase.locked);
     b.startAddingGroup();
     await b.addGroup('Family', 'bobby', pw);
-    await expectLater(b.createGroup(dav1), throwsA(isA<AppException>()));
+    // A new group cannot be created where a group already lives.
+    await expectLater(b.createGroup(dav1),
+        throwsA(isA<AppException>().having((e) => e.template, 'template', contains('already contains'))));
     await b.createGroup(WebDavConfig('https://cloud.example/dav/family/', 'u', 'p'));
+    expect(b.groups, ['Family', 'Work']);
+
+    // A second identity on the same device may join the same group (for
+    // example to test, or for a second role).
+    b.startAddingGroup();
+    await b.addGroup('Work 2', 'bob2', pw);
+    await a.run((s) => s.addMember(b.identity!.joinRequest));
+    await b.joinGroup(Invite(dav1), a.session!.fingerprint);
+    expect(b.session!.members.map((m) => m.identifier), ['alice', 'bob', 'bob2']);
+    await b.deleteGroup();
     expect(b.groups, ['Family', 'Work']);
 
     b.selectGroup('Work');

@@ -57,6 +57,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    appThemeMode = widget.themeMode;
     WidgetsBinding.instance.addObserver(this);
   }
 

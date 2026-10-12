@@ -6,8 +6,10 @@ import 'package:redcourier/app_controller.dart';
 import 'package:redcourier/core/identity.dart';
 import 'package:redcourier/core/remote.dart';
 import 'package:redcourier/core/tor.dart';
+import 'package:redcourier/core/updater.dart';
 import 'package:redcourier/i18n.dart';
 import 'package:redcourier/notifications.dart';
+import 'package:redcourier/ui/update_ui.dart';
 
 import 'support/fakes.dart';
 import 'support/ui.dart';
@@ -83,6 +85,48 @@ void main() {
     await waitFor(t, find.text('Up to date'));
     expect(c.session!.local.webdav.password, 'new');
     expect(find.text('Change WebDAV access'), findsNothing, reason: 'the banner is gone');
+    await unmount(t);
+  }, variant: desktop);
+
+  testWidgets('without any group, the settings (and updates) can be opened', (t) async {
+    await prepare(t, tmp);
+    updateInstallDir = tmp.path; // as if installed by one of the installers
+    addTearDown(() => updateInstallDir = installedDir());
+    final c = testController(dav, tmp);
+    await pumpApp(t, c, tmp);
+    expect(find.text('Welcome to RedCourier'), findsOneWidget);
+
+    await t.tap(find.byTooltip('Settings'));
+    await t.pumpAndSettle();
+    expect(find.text('Tor'), findsOneWidget);
+    expect(find.text('Check for updates at start'), findsOneWidget);
+    await t.ensureVisible(find.text('Check now'));
+    expect(find.text('Switch group'), findsNothing, reason: 'no group is unlocked');
+    expect(find.text('Change WebDAV access'), findsNothing);
+    await t.pageBack();
+    await t.pumpAndSettle();
+    expect(find.text('Welcome to RedCourier'), findsOneWidget);
+    await unmount(t);
+  }, variant: desktop);
+
+  testWidgets('a group that was never set up can be deleted from its setup screen', (t) async {
+    await prepare(t, tmp);
+    final c = testController(dav, tmp);
+    await pumpApp(t, c, tmp);
+    await tapText(t, 'Join a group');
+    await enter(t, 'Group name (only on this device)', 'Pending');
+    await enter(t, 'Identifier (name or handle)', 'bob');
+    await enter(t, 'Password for this group', 'correct horse');
+    await enter(t, 'Repeat password', 'correct horse');
+    await tapText(t, 'Continue');
+    await waitFor(t, find.text('Join an existing group'));
+    expect(c.groups, ['Pending']);
+
+    await tapText(t, 'Delete this group from this device');
+    await t.pumpAndSettle();
+    await tapText(t, 'Delete');
+    await waitFor(t, find.text('Welcome to RedCourier'));
+    expect(c.groups, isEmpty);
     await unmount(t);
   }, variant: desktop);
 

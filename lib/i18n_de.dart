@@ -277,13 +277,11 @@ const germanTexts = <String, String>{
   'Delete this group from this device': 'Diese Gruppe von diesem Gerät löschen',
   'Forgot password? Delete this group from this device': 'Passwort vergessen? Diese Gruppe von diesem Gerät löschen',
   'Delete group "{name}" from this device?': 'Gruppe „{name}“ von diesem Gerät löschen?',
-  'This deletes your identity, keys and the local data of this group from this device. Nothing on the server changes. To use the group again you need a new join request. Downloaded files are not deleted.':
-      'Damit werden deine Identität, deine Schlüssel und die lokalen Daten dieser Gruppe von diesem Gerät gelöscht. Auf dem Server ändert sich nichts. Um die Gruppe wieder zu nutzen, brauchst du eine neue Beitrittsanfrage. Heruntergeladene Dateien bleiben erhalten.',
+  'This deletes your identity, keys and the local data of this group from this device. Nothing on the server changes. To use the group again you need a new join request. Files you saved to a folder are not deleted.':
+      'Damit werden deine Identität, deine Schlüssel und die lokalen Daten dieser Gruppe von diesem Gerät gelöscht. Auf dem Server ändert sich nichts. Um die Gruppe wieder zu nutzen, brauchst du eine neue Beitrittsanfrage. Dateien, die du in einem Ordner gespeichert hast, bleiben erhalten.',
   'A group with this name already exists on this device.': 'Auf diesem Gerät gibt es schon eine Gruppe mit diesem Namen.',
   'Every group on this device has its own identity, password and sync file. Members of one group never see your other groups.':
       'Jede Gruppe auf diesem Gerät hat eine eigene Identität, ein eigenes Passwort und eine eigene Sync-Datei. Mitglieder einer Gruppe sehen deine anderen Gruppen nie.',
-  'The group "{name}" on this device already uses this WebDAV folder. Every group needs its own folder.':
-      'Die Gruppe „{name}“ auf diesem Gerät nutzt diesen WebDAV-Ordner schon. Jede Gruppe braucht einen eigenen Ordner.',
 
   // ── Updates ──
   'Updates': 'Updates',

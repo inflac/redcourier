@@ -314,7 +314,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           tr('Delete group "{name}" from this device?', {'name': widget.app.groupName}),
                           tr('This deletes your identity, keys and the local data of this group from '
                               'this device. Nothing on the server changes. To use the group again you '
-                              'need a new join request. Downloaded files are not deleted.'),
+                              'need a new join request. Files you saved to a folder are not deleted.'),
                           action: tr('Delete'),
                           danger: true);
                       if (ok) await widget.app.deleteGroup();

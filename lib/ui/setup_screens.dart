@@ -8,16 +8,23 @@ import '../core/vault.dart';
 import '../i18n.dart';
 import '../theme.dart';
 import 'qr_scan.dart';
+import 'settings_screen.dart';
 import 'update_ui.dart';
 import 'widgets.dart';
 
 /// Centered, width-limited page used by all setup screens.
 class _SetupPage extends StatelessWidget {
+  final AppController app;
   final String title;
   final List<Widget> children;
   final List<Widget> actions;
   final Widget? leading;
-  const _SetupPage({required this.title, required this.children, this.actions = const [], this.leading});
+  const _SetupPage(
+      {required this.app,
+      required this.title,
+      required this.children,
+      this.actions = const [],
+      this.leading});
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +32,18 @@ class _SetupPage extends StatelessWidget {
       appBar: AppBar(
         title: Text(title),
         leading: leading,
-        actions: [...actions, const LanguageButton()],
+        actions: [
+          ...actions,
+          // App settings (language, Tor, updates) work without a group, so the
+          // app can be updated before joining one.
+          IconButton(
+            tooltip: tr('Settings'),
+            icon: const Icon(Icons.settings),
+            onPressed: () => Navigator.of(context)
+                .push(MaterialPageRoute(builder: (_) => SettingsScreen(app: app, themeMode: appThemeMode))),
+          ),
+          const LanguageButton(),
+        ],
       ),
       body: SafeArea(
         child: Column(children: [
@@ -181,7 +199,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         : null;
 
     if (_start == null) {
-      return _SetupPage(title: title, leading: leading, children: [
+      return _SetupPage(app: widget.app, title: title, leading: leading, children: [
         _Intro(_isAdditional
             ? tr('Every group on this device has its own identity, password and sync file. '
                 'Members of one group never see your other groups.')
@@ -189,10 +207,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 'The files are stored encrypted at file sharing services, the group itself in a '
                 'shared WebDAV folder, for example on Nextcloud. All traffic goes through Tor.')),
         _choice(Icons.login, tr('Join a group'),
-            tr('An admin adds you. You send them your join request and get an invite back.'),
-            _Start.join),
+            tr('An admin adds you. You send them your join request and get an invite back.'), _Start.join),
         const SizedBox(height: 12),
-        _choice(Icons.add_circle_outline, tr('Start a new group'),
+        _choice(
+            Icons.add_circle_outline,
+            tr('Start a new group'),
             tr('You become the admin. You need an empty WebDAV folder, for example on Nextcloud.'),
             _Start.create),
       ]);
@@ -200,6 +219,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
     final create = _start == _Start.create;
     return _SetupPage(
+      app: widget.app,
       title: create ? tr('Start a new group') : tr('Join a group'),
       leading: IconButton(
         tooltip: tr('Back'),
@@ -211,7 +231,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             'private keys never leave this device and are protected by the password below. '
             'The group name is only shown on this device.')),
         SecureTextField(
-            controller: _name, label: tr('Group name (only on this device)'), hint: tr('e.g. Work or Family')),
+            controller: _name,
+            label: tr('Group name (only on this device)'),
+            hint: tr('e.g. Work or Family')),
         const SizedBox(height: 12),
         SecureTextField(controller: _identifier, label: tr('Identifier (name or handle)')),
         const SizedBox(height: 12),
@@ -231,16 +253,17 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           SecureTextField(controller: _user, label: tr('WebDAV username')),
           const SizedBox(height: 12),
           SecureTextField(
-              controller: _pass, label: tr('WebDAV app password'), obscure: true, onSubmitted: (_) => _submit()),
+              controller: _pass,
+              label: tr('WebDAV app password'),
+              obscure: true,
+              onSubmitted: (_) => _submit()),
         ],
         _ErrorText(_error),
         const SizedBox(height: 20),
         ElevatedButton.icon(
           onPressed: _busy ? null : _submit,
           icon: _busyIcon(_busy, create ? Icons.cloud_upload_outlined : Icons.key),
-          label: Text(_busy
-              ? tr('Creating keys…')
-              : (create ? tr('Create group') : tr('Continue'))),
+          label: Text(_busy ? tr('Creating keys…') : (create ? tr('Create group') : tr('Continue'))),
         ),
       ],
     );
@@ -288,7 +311,7 @@ class _UnlockScreenState extends State<UnlockScreen> {
       tr('Delete group "{name}" from this device?', {'name': _app.groupName}),
       tr('This deletes your identity, keys and the local data of this group from this device. '
           'Nothing on the server changes. To use the group again you need a new join request. '
-          'Downloaded files are not deleted.'),
+          'Files you saved to a folder are not deleted.'),
       action: tr('Delete'),
       danger: true,
     );
@@ -299,7 +322,7 @@ class _UnlockScreenState extends State<UnlockScreen> {
   Widget build(BuildContext context) {
     final palette = AppPalette.of(context);
     final current = _app.groupName;
-    return _SetupPage(title: 'RedCourier', children: [
+    return _SetupPage(app: _app, title: 'RedCourier', children: [
       const SizedBox(height: 16),
       Icon(Icons.lock_outline, size: 56, color: palette.accent),
       const SizedBox(height: 24),
@@ -337,7 +360,11 @@ class _UnlockScreenState extends State<UnlockScreen> {
       ),
       const SizedBox(height: 8),
       SecureTextField(
-          controller: _pw, label: tr('Password'), obscure: true, autofocus: true, onSubmitted: (_) => _unlock()),
+          controller: _pw,
+          label: tr('Password'),
+          obscure: true,
+          autofocus: true,
+          onSubmitted: (_) => _unlock()),
       _ErrorText(_error),
       const SizedBox(height: 20),
       ElevatedButton.icon(
@@ -446,14 +473,15 @@ class _GroupSetupScreenState extends State<GroupSetupScreen> {
   Future<void> _create() async {
     final urlError = WebDavConfig.validateUrl(_url.text);
     if (urlError != null || _user.text.trim().isEmpty) {
-      setState(() => _createError =
-          urlError != null ? tr(urlError) : tr('Please enter the WebDAV username.'));
+      setState(
+          () => _createError = urlError != null ? tr(urlError) : tr('Please enter the WebDAV username.'));
       return;
     }
     final ok = await confirm(
       context,
       tr('Create a new group?'),
-      tr('RedCourier will create sync.json in\n{url}\n\n'
+      tr(
+          'RedCourier will create sync.json in\n{url}\n\n'
           'Use an empty folder that only your group can access. You become the admin.',
           {'url': _url.text.trim()}),
       action: tr('Create'),
@@ -472,10 +500,25 @@ class _GroupSetupScreenState extends State<GroupSetupScreen> {
     }
   }
 
+  /// The group was created on this device but never joined or set up.
+  Future<void> _delete() async {
+    final ok = await confirm(
+      context,
+      tr('Delete group "{name}" from this device?', {'name': widget.app.groupName}),
+      tr('This deletes your identity, keys and the local data of this group from this device. '
+          'Nothing on the server changes. To use the group again you need a new join request. '
+          'Files you saved to a folder are not deleted.'),
+      action: tr('Delete'),
+      danger: true,
+    );
+    if (ok) await widget.app.deleteGroup();
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = AppPalette.of(context);
     return _SetupPage(
+      app: widget.app,
       title: tr('Group {name}', {'name': widget.app.groupName}),
       actions: [
         IconButton(tooltip: tr('Lock'), icon: const Icon(Icons.lock), onPressed: widget.app.lock),
@@ -496,8 +539,10 @@ class _GroupSetupScreenState extends State<GroupSetupScreen> {
               title: tr('Your join request'),
               code: _me.joinRequest.encode(),
               showQr: false,
-              explanation: tr('It contains only your identifier and public keys. The admin should '
-                  'compare your user id ({id}) with you.', {'id': shortId(_me.userId)}),
+              explanation: tr(
+                  'It contains only your identifier and public keys. The admin should '
+                  'compare your user id ({id}) with you.',
+                  {'id': shortId(_me.userId)}),
             ),
           ),
           const SizedBox(height: 16),
@@ -560,6 +605,15 @@ class _GroupSetupScreenState extends State<GroupSetupScreen> {
             label: Text(_creating ? tr('Creating group…') : tr('Create group')),
           ),
         ]),
+        const SizedBox(height: 24),
+        Center(
+          child: TextButton.icon(
+            style: TextButton.styleFrom(foregroundColor: palette.red),
+            onPressed: _busy || _creating ? null : _delete,
+            icon: const Icon(Icons.delete_outline),
+            label: Text(tr('Delete this group from this device')),
+          ),
+        ),
       ],
     );
   }

@@ -117,7 +117,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         tr('Delete group "{name}" from this device?', {'name': widget.app.groupName}),
         tr('This deletes your identity, keys and the local data of this group from this device. '
             'Nothing on the server changes. To use the group again you need a new join request. '
-            'Downloaded files are not deleted.'),
+            'Files you saved to a folder are not deleted.'),
         action: tr('Delete'),
         danger: true);
     if (!ok) return;
@@ -244,54 +244,58 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Text(_torStatus!),
               ],
             ]),
-            const SizedBox(height: 16),
-            SectionCard(
-                title: tr('Group {name}', {'name': widget.app.groupName}),
-                icon: Icons.group_outlined,
-                children: [
-                  Wrap(spacing: 8, runSpacing: 8, children: [
+            // Group settings only while a group is unlocked; the rest also
+            // works on the setup screens (for example to update the app).
+            if (s != null) ...[
+              const SizedBox(height: 16),
+              SectionCard(
+                  title: tr('Group {name}', {'name': widget.app.groupName}),
+                  icon: Icons.group_outlined,
+                  children: [
+                    Wrap(spacing: 8, runSpacing: 8, children: [
+                      OutlinedButton.icon(
+                        onPressed: _switchGroup,
+                        icon: const Icon(Icons.swap_horiz),
+                        label: Text(tr('Switch group')),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          widget.app.lock();
+                          Navigator.of(context).popUntil((r) => r.isFirst);
+                        },
+                        icon: const Icon(Icons.lock),
+                        label: Text(tr('Lock now')),
+                      ),
+                    ]),
+                    ...[
+                      const SizedBox(height: 16),
+                      Text(tr('WebDAV folder'), style: TextStyle(color: palette.fgDim)),
+                      SelectableText(s.local.webdav.url),
+                      const SizedBox(height: 4),
+                      Text(tr('Username: {name}', {'name': s.local.webdav.username}),
+                          style: TextStyle(color: palette.fgDim)),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: _changeWebDav,
+                        icon: const Icon(Icons.key),
+                        label: Text(tr('Change WebDAV access')),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
                     OutlinedButton.icon(
-                      onPressed: _switchGroup,
-                      icon: const Icon(Icons.swap_horiz),
-                      label: Text(tr('Switch group')),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        widget.app.lock();
-                        Navigator.of(context).popUntil((r) => r.isFirst);
-                      },
-                      icon: const Icon(Icons.lock),
-                      label: Text(tr('Lock now')),
-                    ),
-                  ]),
-                  if (s != null) ...[
-                    const SizedBox(height: 16),
-                    Text(tr('WebDAV folder'), style: TextStyle(color: palette.fgDim)),
-                    SelectableText(s.local.webdav.url),
-                    const SizedBox(height: 4),
-                    Text(tr('Username: {name}', {'name': s.local.webdav.username}),
-                        style: TextStyle(color: palette.fgDim)),
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: _changeWebDav,
-                      icon: const Icon(Icons.key),
-                      label: Text(tr('Change WebDAV access')),
+                      onPressed: _clearDownloads,
+                      icon: const Icon(Icons.folder_delete_outlined),
+                      label: Text(tr('Delete downloaded deliveries')),
                     ),
                     const SizedBox(height: 8),
-                  ],
-                  OutlinedButton.icon(
-                    onPressed: _clearDownloads,
-                    icon: const Icon(Icons.folder_delete_outlined),
-                    label: Text(tr('Delete downloaded deliveries')),
-                  ),
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(foregroundColor: palette.red),
-                    onPressed: _deleteGroup,
-                    icon: const Icon(Icons.delete_forever),
-                    label: Text(tr('Delete this group from this device')),
-                  ),
-                ]),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(foregroundColor: palette.red),
+                      onPressed: _deleteGroup,
+                      icon: const Icon(Icons.delete_forever),
+                      label: Text(tr('Delete this group from this device')),
+                    ),
+                  ]),
+            ],
             const SizedBox(height: 24),
             Center(
               child: Text(tr('RedCourier {version}', {'version': _version}),

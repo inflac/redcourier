@@ -1,10 +1,8 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
-import 'core/crypto_util.dart';
 import 'core/group.dart';
 import 'core/hosts.dart';
 import 'core/identity.dart';
@@ -23,7 +21,6 @@ enum AppPhase { loading, noIdentity, locked, noGroup, ready }
 /// sync.json) and Tor circuits. Nothing is shared between groups.
 class AppController extends ChangeNotifier {
   static const _defaultGroupKey = 'default_group';
-  static const _folderFile = 'folder.txt';
   static final _nameRe = RegExp(r'^[\p{L}\p{N}][\p{L}\p{N}_ .\-]{0,39}$', unicode: true);
 
   /// The app uses WebDAV, the public file hosts and the system download
@@ -239,28 +236,6 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Every group on this device must use its own WebDAV folder, so it has its
-  // own sync.json. Only a hash of the folder URL is stored unencrypted.
-  static String _folderHash(WebDavConfig cfg) =>
-      sha256Hex(utf8.encode(Uri.parse(cfg.url).normalizePath().toString().toLowerCase()));
-
-  Future<void> _checkFolderUnused(WebDavConfig cfg) async {
-    final hash = _folderHash(cfg);
-    for (final g in groups) {
-      if (g == groupName) continue;
-      final f = File(p.join(_groupDir(g).path, _folderFile));
-      if (await f.exists() && (await f.readAsString()).trim() == hash) {
-        throw AppException(
-            'The group "{name}" on this device already uses this WebDAV folder. '
-            'Every group needs its own folder.',
-            {'name': g});
-      }
-    }
-  }
-
-  Future<void> _rememberFolder(WebDavConfig cfg) =>
-      File(p.join(_groupDir(groupName!).path, _folderFile)).writeAsString(_folderHash(cfg));
-
   /// Create the group's sync.json in an empty WebDAV folder (as admin).
   Future<void> createGroup(WebDavConfig cfg) async {
     lastCreateAttempt = cfg;
@@ -268,7 +243,6 @@ class AppController extends ChangeNotifier {
     notifyListeners();
     final data = _data!;
     try {
-      await _checkFolderUnused(cfg);
       session = await GroupSession.create(
         identity: identity!,
         webdav: cfg,
@@ -294,7 +268,6 @@ class AppController extends ChangeNotifier {
     data.pendingAdminKeys.clear();
     lastCreateAttempt = null;
     lastCreateFailure = null;
-    await _rememberFolder(cfg);
     await _persist();
     phase = AppPhase.ready;
     notifyListeners();
@@ -304,19 +277,16 @@ class AppController extends ChangeNotifier {
   /// is saved only if the folder holds this group (GroupSession.changeWebDav).
   Future<void> updateWebDav(WebDavConfig cfg, {String? confirmedFingerprint}) async {
     try {
-      await _checkFolderUnused(cfg);
       final candidate =
           storeFactory?.call(() => cfg) ?? WebDavStore(() => cfg, clientFactory: TorNetwork.createHttpClient);
       await session!.changeWebDav(cfg, candidate, confirmedFingerprint: confirmedFingerprint);
-      await _rememberFolder(cfg);
-    } finally {
+      } finally {
       notifyListeners();
     }
   }
 
   /// Join an existing group with an invite from its admin.
   Future<void> joinGroup(Invite invite, String fingerprint) async {
-    await _checkFolderUnused(invite.webdav);
     session = await GroupSession.join(
       identity: identity!,
       invite: invite,
@@ -327,7 +297,6 @@ class AppController extends ChangeNotifier {
       tempDir: tempDir,
       partialDir: _partialDir,
     );
-    await _rememberFolder(invite.webdav);
     await _persist();
     phase = AppPhase.ready;
     notifyListeners();

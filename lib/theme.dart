@@ -210,3 +210,7 @@ ThemeData buildAppTheme(Brightness brightness) {
     ),
   );
 }
+
+/// The app's theme mode, set by App; settings opened from the setup screens
+/// use it.
+ValueNotifier<ThemeMode> appThemeMode = ValueNotifier(ThemeMode.system);
