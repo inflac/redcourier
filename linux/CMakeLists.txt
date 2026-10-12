@@ -97,6 +97,11 @@ install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
 install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   COMPONENT Runtime)
 
+# Window icon, shown in the task bar when no .desktop entry matches the window.
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../assets/icon/app_icon_rounded.png"
+  DESTINATION "${INSTALL_BUNDLE_DATA_DIR}" RENAME "redcourier.png"
+  COMPONENT Runtime)
+
 install(FILES "${FLUTTER_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 

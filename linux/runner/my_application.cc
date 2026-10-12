@@ -48,6 +48,15 @@ static void my_application_activate(GApplication* application) {
   }
 
   gtk_window_set_default_size(window, 1280, 720);
+
+  // Window icon from the bundle (data/redcourier.png next to the binary), so
+  // the task bar shows the logo even without an installed .desktop entry.
+  g_autofree gchar* exe = g_file_read_link("/proc/self/exe", nullptr);
+  if (exe != nullptr) {
+    g_autofree gchar* dir = g_path_get_dirname(exe);
+    g_autofree gchar* icon = g_build_filename(dir, "data", "redcourier.png", nullptr);
+    gtk_window_set_icon_from_file(window, icon, nullptr);
+  }
   gtk_widget_show(GTK_WIDGET(window));
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
@@ -117,11 +126,10 @@ static void my_application_class_init(MyApplicationClass* klass) {
 static void my_application_init(MyApplication* self) {}
 
 MyApplication* my_application_new() {
-  // Set the program name to the application ID, which helps various systems
-  // like GTK and desktop environments map this running application to its
-  // corresponding .desktop file. This ensures better integration by allowing
-  // the application to be recognized beyond its binary name.
-  g_set_prgname(APPLICATION_ID);
+  // GTK derives the X11 window class and the Wayland app_id from the program
+  // name. It must match redcourier.desktop (StartupWMClass=redcourier), or
+  // GNOME shows a generic icon in the task bar instead of the logo.
+  g_set_prgname("redcourier");
 
   return MY_APPLICATION(g_object_new(my_application_get_type(),
                                      "application-id", APPLICATION_ID,

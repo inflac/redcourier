@@ -6,3 +6,4 @@ Exec=redcourier
 Icon=redcourier
 Terminal=false
 Categories=Network;FileTransfer;
+StartupWMClass=redcourier
