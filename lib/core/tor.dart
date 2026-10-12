@@ -42,6 +42,9 @@ class TorNetwork {
   /// so servers do not see "RedCourier" or Dart's default.
   static const userAgent = 'Mozilla/5.0 (Windows NT 10.0; rv:140.0) Gecko/20100101 Firefox/140.0';
 
+  /// Answers whether a request arrived through Tor (tests use a local server).
+  static String checkUrl = 'https://check.torproject.org/api/ip';
+
   /// True if the app runs under torsocks (LD_PRELOAD).
   static bool underTorsocks = _detectTorsocks();
 
@@ -232,7 +235,7 @@ class TorNetwork {
 
   static Future<String> _checkIsTor(HttpClient client) async {
     try {
-      final req = await client.getUrl(Uri.parse('https://check.torproject.org/api/ip'));
+      final req = await client.getUrl(Uri.parse(checkUrl));
       final res = await req.close().timeout(const Duration(seconds: 60));
       final body = await utf8.decodeStream(res);
       final json = jsonDecode(body) as Map<String, dynamic>;

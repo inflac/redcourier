@@ -88,6 +88,49 @@ void main() {
     await unmount(t);
   }, variant: desktop);
 
+  testWidgets('the access dialog checks the URL and asks for a fingerprint for another group', (t) async {
+    await prepare(t, tmp);
+    final c = testController(dav, tmp);
+    final other = testController(dav, Directory('${tmp.path}/other')..createSync());
+    await t.runAsync(() async {
+      await other.init(Directory('${tmp.path}/other'));
+      await other.addGroup('Theirs', 'mallory', 'correct horse');
+      await other.createGroup(WebDavConfig('https://cloud.example/dav/theirs/', 'u', 'p'));
+      await c.init(tmp);
+      await c.addGroup('Work', 'alice', 'correct horse');
+      await c.createGroup(WebDavConfig('https://cloud.example/dav/work/', 'u', 'p'));
+    });
+    await pumpApp(t, c, tmp, init: false);
+    await waitFor(t, find.text('Inbox'));
+    await t.tap(find.byTooltip('Settings'));
+    await t.pumpAndSettle();
+    await tapText(t, 'Change WebDAV access');
+    await t.pumpAndSettle();
+
+    await enter(t, 'WebDAV folder URL', 'not a url');
+    await tapText(t, 'Check and save');
+    await waitFor(t, find.text('Please enter a full URL.'));
+
+    // A folder holding another group: the app wants the fingerprint.
+    await enter(t, 'WebDAV folder URL', 'https://cloud.example/dav/theirs/');
+    await tapText(t, 'Check and save');
+    await waitFor(t, find.textContaining('different admin key'));
+    await enter(t, 'Group fingerprint', 'xyz');
+    await tapText(t, 'Check and save');
+    await waitFor(t, find.textContaining('not a complete group fingerprint'));
+    // Even with its fingerprint, this device is no member there.
+    await enter(t, 'Group fingerprint', other.session!.fingerprint);
+    await tapText(t, 'Check and save');
+    await waitFor(t, find.textContaining('not (or no longer) a member'));
+    expect(c.session!.local.webdav.url, 'https://cloud.example/dav/work/');
+
+    await tapText(t, 'Cancel');
+    await t.pumpAndSettle();
+    await t.pageBack();
+    await t.pumpAndSettle();
+    await unmount(t);
+  }, variant: desktop);
+
   testWidgets('without any group, the settings (and updates) can be opened', (t) async {
     await prepare(t, tmp);
     updateInstallDir = tmp.path; // as if installed by one of the installers

@@ -64,6 +64,69 @@ void main() {
     await unmount(t);
   }, variant: desktop);
 
+  Future<AppController> groupWith(WidgetTester t, List<String> members) async {
+    final c = testController(dav, tmp);
+    // Before the app is shown: group operations and the app's own syncs must
+    // not overlap across the test's fake and real clocks.
+    await t.runAsync(() async {
+      await c.init(tmp);
+      await c.addGroup('Work', 'alice', 'correct horse');
+      await c.createGroup(WebDavConfig('https://cloud.example/dav/work/', 'u', 'p'));
+      for (final name in members) {
+        await c.run((s) async => s.addMember((await Identity.generate(name)).joinRequest));
+      }
+    });
+    await pumpApp(t, c, tmp, init: false);
+    await waitFor(t, find.byIcon(Icons.sync)); // the first sync is done
+    return c;
+  }
+
+  testWidgets('send screen: nobody to send to', (t) async {
+    await prepare(t, tmp);
+    final c = await groupWith(t, []);
+    navigatorKey.currentState!.push(MaterialPageRoute(builder: (_) => SendScreen(app: c)));
+    await waitFor(t, find.text('No other members yet. Ask an admin to add people.'));
+    await tapText(t, 'Send');
+    await waitFor(t, find.text('Choose at least one recipient.'));
+    navigatorKey.currentState!.pop();
+    await idle(t);
+    await unmount(t);
+  }, variant: desktop);
+
+  testWidgets('send screen: search, removing files, lifetime', (t) async {
+    await prepare(t, tmp);
+    final c = await groupWith(t, ['bob', 'carol', 'dave', 'erin', 'frank', 'grace', 'heidi', 'ivan', 'judy']);
+    final a = File(p.join(tmp.path, 'a.txt'))..writeAsStringSync('a');
+    final b = File(p.join(tmp.path, 'b.txt'))..writeAsStringSync('b');
+    navigatorKey.currentState!
+        .push(MaterialPageRoute(builder: (_) => SendScreen(app: c, initialPaths: [a.path, b.path])));
+    await waitFor(t, find.text('Search identifier'));
+    await enter(t, 'Search identifier', 'gr');
+    expect(find.widgetWithText(FilterChip, 'grace'), findsOneWidget);
+    expect(find.widgetWithText(FilterChip, 'bob'), findsNothing);
+    await tapText(t, 'grace');
+
+    // Remove one file, then both: sending needs at least one file.
+    expect(find.text('a.txt'), findsOneWidget);
+    await t.tap(find.byTooltip('Remove').first);
+    await t.pump();
+    expect(find.text('a.txt'), findsNothing);
+    await t.tap(find.byTooltip('Remove').first);
+    await t.pump();
+    await tapText(t, 'Send to 1 recipient(s)');
+    await waitFor(t, find.text('Choose at least one file.'));
+
+    // Other lifetime.
+    await t.tap(find.text('3 days'));
+    await waitFor(t, find.text('6 days'));
+    await t.tap(find.text('1 day').last);
+    await waitGone(t, find.text('6 days'));
+    expect(find.text('1 day'), findsOneWidget);
+    navigatorKey.currentState!.pop();
+    await idle(t);
+    await unmount(t);
+  }, variant: desktop);
+
   testWidgets('an admin creates a group, manages members and sends a file', (t) async {
     await prepare(t, tmp);
     final c = testController(dav, tmp);

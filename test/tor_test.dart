@@ -32,6 +32,9 @@ class FakeSocks {
   final ServerSocket server;
   final requests = <String>[];
   final users = <String>[];
+
+  /// Answers like a SOCKS server that accepts none of the offered methods.
+  bool rejectMethods = false;
   FakeSocks(this.server) {
     server.listen(_handle);
   }
@@ -49,6 +52,11 @@ class FakeSocks {
       buf.addAll(d);
       if (stage == 0 && buf.length >= 2 && buf.length >= 2 + buf[1]) {
         buf.removeRange(0, 2 + buf[1]);
+        if (rejectMethods) {
+          c.add([5, 0xff]);
+          await c.close();
+          return;
+        }
         c.add([5, 2]);
         stage = 1;
       }
@@ -86,10 +94,31 @@ class FakeSocks {
   }
 }
 
+/// Reads until the peer has been quiet for [idle].
+Future<List<int>> readAll(Socket c, {required Duration idle}) {
+  final input = <int>[];
+  final done = Completer<List<int>>();
+  Timer? timer;
+  void arm() {
+    timer?.cancel();
+    timer = Timer(idle, () {
+      if (!done.isCompleted) done.complete(input);
+    });
+  }
+
+  arm();
+  c.listen((d) {
+    input.addAll(d);
+    arm();
+  });
+  return done.future;
+}
+
 void main() {
   late FakeSocks socks;
   late HttpServer web;
   String? lastUserAgent;
+  Object isTor = true;
 
   setUp(() async {
     socks = FakeSocks(await ServerSocket.bind(InternetAddress.loopbackIPv4, 0));
@@ -97,7 +126,12 @@ void main() {
     web.listen((r) async {
       final body = await utf8.decodeStream(r);
       lastUserAgent = r.headers.value(HttpHeaders.userAgentHeader);
-      r.response.write('${r.method} ${r.uri.path} $body');
+      if (r.uri.path == '/api/ip') {
+        // Like check.torproject.org.
+        r.response.write(isTor == 'garbage' ? 'not json' : jsonEncode({'IsTor': isTor, 'IP': '203.0.113.7'}));
+      } else {
+        r.response.write('${r.method} ${r.uri.path} $body');
+      }
       await r.response.close();
     });
     TorNetwork.configuredPort = socks.port;
@@ -105,6 +139,8 @@ void main() {
   });
 
   tearDown(() async {
+    TorNetwork.underTorsocks = false;
+    TorNetwork.checkUrl = 'https://check.torproject.org/api/ip';
     await web.close(force: true);
     await socks.server.close();
   });
@@ -211,6 +247,78 @@ void main() {
         s.destroy();
       }, TorIOOverrides());
     }, TorHttpOverrides());
+  });
+
+  test('the Tor check reports the exit address, or that traffic is not going through Tor', () async {
+    TorNetwork.checkUrl = 'http://localhost:${web.port}/api/ip';
+    expect(await TorNetwork.check(), '203.0.113.7');
+    expect(TorNetwork.activePort, socks.port);
+    expect(socks.requests.last, 'localhost:${web.port}', reason: 'the check itself goes through Tor');
+    isTor = false;
+    await expectLater(TorNetwork.check(),
+        throwsA(isA<TorException>().having((e) => e.template, 't', contains('does not go through Tor'))));
+    isTor = 'garbage';
+    await expectLater(TorNetwork.check(),
+        throwsA(isA<TorException>().having((e) => e.template, 't', contains('Tor check failed'))));
+  });
+
+  test('under torsocks: checked once, then plain connections that torsocks routes', () async {
+    TorNetwork.underTorsocks = true;
+    TorNetwork.checkUrl = 'http://localhost:${web.port}/api/ip';
+    isTor = false;
+    await expectLater(TorNetwork.createHttpClient(), throwsA(isA<TorException>()));
+    isTor = true; // a failed check is repeated on the next attempt
+    final client = await TorNetwork.createHttpClient();
+    final res = await (await client.getUrl(Uri.parse('http://localhost:${web.port}/direct'))).close();
+    expect(await utf8.decodeStream(res), 'GET /direct ');
+    client.close();
+    expect(socks.requests, isEmpty, reason: 'torsocks does the routing, not the app');
+    expect(await TorNetwork.check(), '203.0.113.7');
+
+    final echo = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    echo.listen((c) async {
+      await readAll(c, idle: const Duration(milliseconds: 200));
+      c.write('ok');
+      await c.close();
+    });
+    expect(utf8.decode(await TorNetwork.tcpExchange('localhost', echo.port, [1, 2, 3])), 'ok');
+    await echo.close();
+  });
+
+  test('SOCKS and raw TCP failures become clear errors', () async {
+    await expectLater(TorNetwork.tcpExchange('unreachable.example', 9999, [1]),
+        throwsA(isA<TorException>().having((e) => e.template, 't', contains('could not connect'))));
+
+    final echo = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    echo.listen((c) async {
+      await readAll(c, idle: const Duration(milliseconds: 200));
+      c.add(List.filled(5000, 65));
+      await c.close();
+    });
+    await expectLater(TorNetwork.tcpExchange('localhost', echo.port, [1], maxReply: 100),
+        throwsA(isA<SocketException>()));
+    await echo.close();
+
+    socks.rejectMethods = true;
+    final client = await TorNetwork.createHttpClient();
+    await expectLater(() async => (await client.getUrl(Uri.parse('http://localhost:${web.port}/'))).close(),
+        throwsA(isA<SocketException>()));
+    client.close(force: true);
+  });
+
+  test('installing the guard replaces the global overrides', () async {
+    final http = HttpOverrides.current, io = IOOverrides.current;
+    TorNetwork.installGuard();
+    try {
+      expect(HttpOverrides.current, isA<TorHttpOverrides>());
+      expect(IOOverrides.current, isA<TorIOOverrides>());
+      // The SOCKS port stays reachable through startConnect as well.
+      final task = await Socket.startConnect('127.0.0.1', socks.port);
+      (await task.socket).destroy();
+    } finally {
+      HttpOverrides.global = http;
+      IOOverrides.global = io;
+    }
   });
 
   test('missing Tor is reported clearly', () async {
