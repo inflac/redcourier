@@ -113,6 +113,96 @@ class BlobCrypto {
     }
   }
 
+  /// Encrypts a stream straight into [outPath] (same format as
+  /// [encryptFile]), so no plaintext copy is ever written.
+  static Future<void> encryptStream(Stream<List<int>> input, String outPath, Uint8List key, String blobName,
+      {int chunkSize = defaultChunkSize}) async {
+    final aes = AesGcm.with256bits();
+    final secret = SecretKey(key);
+    final prefix = randomBytes(8);
+    final out = await File(outPath).open(mode: FileMode.write);
+    var index = 0;
+    Future<void> writeChunk(List<int> plain, bool last) async {
+      final box = await aes.encrypt(plain,
+          secretKey: secret, nonce: [...prefix, ..._u32(index)], aad: _aad(blobName, index, last));
+      await out.writeFrom(box.cipherText);
+      await out.writeFrom(box.mac.bytes);
+      index++;
+    }
+
+    try {
+      await out.writeFrom([...magic, ..._u32(chunkSize), ...prefix]);
+      // The last chunk carries the final flag, so one full chunk is held back
+      // until it is known whether more data follows.
+      final buffer = BytesBuilder(copy: false);
+      Uint8List? held;
+      await for (final data in input) {
+        buffer.add(data);
+        while (buffer.length >= chunkSize) {
+          final all = buffer.takeBytes();
+          if (held != null) await writeChunk(held, false);
+          held = Uint8List.sublistView(all, 0, chunkSize);
+          buffer.add(Uint8List.sublistView(all, chunkSize));
+        }
+      }
+      final rest = buffer.takeBytes();
+      if (held != null && rest.isEmpty) {
+        await writeChunk(held, true);
+      } else {
+        if (held != null) await writeChunk(held, false);
+        await writeChunk(rest, true);
+      }
+    } finally {
+      await out.close();
+    }
+  }
+
+  /// Decrypts [inPath] chunk by chunk. Every chunk is authenticated before it
+  /// is handed on; a truncated or modified file ends the stream with a
+  /// [CryptoException], so consumers must discard what they wrote so far.
+  static Stream<Uint8List> decryptStream(String inPath, Uint8List key, String blobName) async* {
+    final aes = AesGcm.with256bits();
+    final secret = SecretKey(key);
+    final input = await File(inPath).open();
+    try {
+      final total = await input.length();
+      final header = await input.read(headerLength);
+      if (header.length != headerLength ||
+          header[0] != magic[0] || header[1] != magic[1] ||
+          header[2] != magic[2] || header[3] != magic[3]) {
+        throw CryptoException('Not a RedCourier file.');
+      }
+      final chunkSize = ByteData.sublistView(header, 4, 8).getUint32(0, Endian.big);
+      if (chunkSize == 0 || chunkSize > maxChunkSize) throw CryptoException('Invalid chunk size.');
+      final prefix = header.sublist(8, 16);
+      final body = total - headerLength;
+      final encChunk = chunkSize + tagLength;
+      if (body < tagLength) throw CryptoException('File is truncated.');
+      final chunks = (body + encChunk - 1) ~/ encChunk;
+      for (var i = 0; i < chunks; i++) {
+        final last = i == chunks - 1;
+        final data = await input.read(encChunk);
+        if (data.length < tagLength || (!last && data.length != encChunk)) {
+          throw CryptoException('File is truncated.');
+        }
+        final List<int> plain;
+        try {
+          plain = await aes.decrypt(
+            SecretBox(data.sublist(0, data.length - tagLength),
+                nonce: [...prefix, ..._u32(i)], mac: Mac(data.sublist(data.length - tagLength))),
+            secretKey: secret,
+            aad: _aad(blobName, i, last),
+          );
+        } on SecretBoxAuthenticationError {
+          throw CryptoException('The file was modified or the key is wrong.');
+        }
+        yield plain is Uint8List ? plain : Uint8List.fromList(plain);
+      }
+    } finally {
+      await input.close();
+    }
+  }
+
   /// Run in a background isolate so large files do not block the UI.
   static Future<void> encryptFileInBackground(
           String inPath, String outPath, Uint8List key, String blobName) =>

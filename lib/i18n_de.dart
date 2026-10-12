@@ -184,11 +184,7 @@ const germanTexts = <String, String>{
   'Group': 'Gruppe',
   'WebDAV folder': 'WebDAV-Ordner',
   'Username: {name}': 'Benutzername: {name}',
-  'Delete downloaded files': 'Heruntergeladene Dateien löschen',
-  'Delete downloaded files?': 'Heruntergeladene Dateien löschen?',
-  'This deletes everything in\n{path}': 'Damit wird alles gelöscht in\n{path}',
   'Downloads deleted.': 'Downloads gelöscht.',
-  'Could not delete: {reason}': 'Löschen fehlgeschlagen: {reason}',
 
   // ── Sync and server errors ──
   'No sync.json found in the WebDAV folder.': 'Im WebDAV-Ordner wurde keine sync.json gefunden.',
@@ -324,10 +320,8 @@ const germanTexts = <String, String>{
       'Die Signatur des Updates ist ungültig. Es wurde nicht installiert.',
   'The update package is incomplete.': 'Das Update-Paket ist unvollständig.',
   // ── File hosts ──
-  'Packing files…': 'Dateien werden gepackt…',
   'Encrypting…': 'Wird verschlüsselt…',
   'Decrypting…': 'Wird entschlüsselt…',
-  'Unpacking…': 'Wird entpackt…',
   'Part {i}: uploading to {host}…': 'Teil {i}: wird zu {host} hochgeladen…',
   'No hosting service accepts a delivery of this size.': 'Kein Datei-Anbieter nimmt eine Lieferung dieser Größe an.',
   'The part is too large for {host}.': 'Der Teil ist zu groß für {host}.',
@@ -472,4 +466,30 @@ const germanTexts = <String, String>{
       'WebDAV-Zugang',
   'WebDAV access checked and saved.':
       'WebDAV-Zugang geprüft und gespeichert.',
+  'A file name is too long.':
+      'Ein Dateiname ist zu lang.',
+  'Delete downloaded deliveries':
+      'Heruntergeladene Lieferungen löschen',
+  'Delete downloaded deliveries?':
+      'Heruntergeladene Lieferungen löschen?',
+  'Download the delivery first.':
+      'Lade die Lieferung zuerst herunter.',
+  'Downloaded, encrypted on this device':
+      'Heruntergeladen, verschlüsselt auf diesem Gerät',
+  'Downloaded. It stays encrypted on this device until you save the files.':
+      'Heruntergeladen. Die Lieferung bleibt verschlüsselt auf diesem Gerät, bis du die Dateien speicherst.',
+  'Save files to…':
+      'Dateien speichern unter…',
+  'Save here':
+      'Hier speichern',
+  'Saving failed: {reason}':
+      'Speichern fehlgeschlagen: {reason}',
+  'The encrypted copy was deleted from this device.':
+      'Die verschlüsselte Kopie wurde von diesem Gerät gelöscht.',
+  'This deletes the encrypted copies of all downloaded deliveries of this group from this device. Files you saved to a folder are not touched.':
+      'Das löscht die verschlüsselten Kopien aller heruntergeladenen Lieferungen dieser Gruppe von diesem Gerät. Dateien, die du in einem Ordner gespeichert hast, bleiben unberührt.',
+  'This delivery was sent with an older version of RedCourier. Ask the sender to send it again.':
+      'Diese Lieferung wurde mit einer älteren RedCourier-Version gesendet. Bitte den Absender, sie noch einmal zu senden.',
+  '{name} changed while it was being sent.':
+      '{name} hat sich während des Sendens verändert.',
 };

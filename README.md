@@ -12,6 +12,10 @@ End-to-end encrypted file delivery for small groups. No own server is needed:
 - Recipients see new deliveries with sender and size the next time they open the
   app, and download them with one tap. While a group is unlocked, the app syncs
   every 10 minutes and can show a notification (without sender or group name).
+- Received files are never stored unencrypted by the app. A download stays
+  encrypted on the device; *Save files to…* decrypts it straight into a folder
+  you choose, for example a mounted VeraCrypt volume. Sending reads the files
+  from where they are and encrypts them on the fly, without a temporary copy.
 - Uploads and downloads can be stopped. A stopped or broken download keeps its
   finished parts and resumes with the first missing one.
 - Large deliveries are split into several ZIP parts and spread over the file
@@ -44,8 +48,8 @@ How it works and what it protects against is described in
 
 The installer unpacks the app to `~/Persistent/programs/redcourier` and keeps
 your groups and keys in `~/Persistent/programs/redcourier/data`, so they
-survive reboots. It asks whether received files should also be kept; by
-default they go to `~/Tor Browser` and are gone after a reboot.
+survive reboots. Received deliveries stay encrypted there too; you save the
+files to a folder of your choice when you need them (see below).
 
 To **update**, unpack the new package and run the *installed* installer with
 the new folder. It checks the new package against the release key stored on

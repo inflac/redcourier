@@ -124,7 +124,11 @@ class DeliveryPayload {
   final String id;
   final Uint8List key;
   final List<HostedPart> parts;
-  DeliveryPayload(this.id, this.key, this.parts);
+
+  /// Delivery.payloadFormat; deliveries of earlier versions (ZIP inside the
+  /// encryption) cannot be saved without a plaintext copy and are refused.
+  final String format;
+  DeliveryPayload(this.id, this.key, this.parts, [this.format = Delivery.payloadFormat]);
 }
 
 class Entry {
@@ -647,7 +651,7 @@ class GroupSession {
         expires: DateTime.fromMillisecondsSinceEpoch((raw['expires'] as int) * 1000),
         note: data['note'] as String? ?? '',
         files: files,
-        payload: DeliveryPayload(payloadId, payloadKey, parts),
+        payload: DeliveryPayload(payloadId, payloadKey, parts, payloadJson['format'] as String? ?? 'zip'),
         to: to,
         sentByMe: sender == myId,
         forMe: to.contains(myId),
@@ -755,17 +759,12 @@ class GroupSession {
       final files = <Map<String, dynamic>>[
         for (final path in paths) {'name': p.basename(path), 'size': await File(path).length()},
       ];
-      onProgress?.call('Packing files…', const {}, null);
-      final zip = p.join(work.path, 'payload.zip');
-      await Delivery.zipFiles(paths, zip);
-      token.throwIfCancelled();
-
+      // The files are encrypted while they are read; no plaintext copy.
       onProgress?.call('Encrypting…', const {}, null);
       final payloadId = randomHex(16);
       final payloadKey = randomBytes(32);
       final blob = p.join(work.path, 'payload.rcb');
-      await Delivery.encrypt(zip, blob, payloadKey, payloadId);
-      await File(zip).delete();
+      await Delivery.packEncrypted(paths, blob, payloadKey, payloadId);
       token.throwIfCancelled();
 
       // Each part is cut to the size of the host that receives it. Hosts with
@@ -827,6 +826,7 @@ class GroupSession {
         'files': files,
         'to': recipientIds.toSet().toList(),
         'payload': {
+          'format': Delivery.payloadFormat,
           'id': payloadId,
           'key': b64e(payloadKey),
           'parts': [for (final part in uploaded) part.toJson()],
@@ -868,11 +868,16 @@ class GroupSession {
   }
 
   // ── Receiving ──
+  //
+  // Received deliveries are only ever kept encrypted on this device
+  // (partialDir/<entry id>/payload.rcb). The user saves the files to a folder
+  // of their choice, for example an encrypted volume; only there is
+  // plaintext written.
 
   Directory _partialFor(Entry entry) => Directory(p.join(partialDir.path, entry.id));
 
-  /// How many parts of an interrupted download of [entry] are already on
-  /// this device, or null if there is none.
+  /// How many parts of [entry] are on this device (encrypted), or null if
+  /// none. Equal to the number of parts once the download is complete.
   int? partialParts(Entry entry) {
     try {
       final f = File(p.join(_partialFor(entry).path, 'progress.json'));
@@ -885,12 +890,15 @@ class GroupSession {
     }
   }
 
-  /// Download all parts of [entry], check, decrypt and unpack the files into
-  /// a new folder inside [targetDir]. Returns that folder.
+  /// True if all parts of [entry] are on this device, still encrypted.
+  bool isDownloaded(Entry entry) => partialParts(entry) == entry.payload.parts.length;
+
+  /// Downloads all parts of [entry] and checks them. The delivery stays
+  /// encrypted on this device; [saveFiles] writes the files somewhere.
   ///
-  /// Every finished part is kept on this device. If the download is cancelled
-  /// or fails, the next call continues with the first missing part.
-  Future<String> download(Entry entry, Directory targetDir,
+  /// Every finished part is kept. If the download is cancelled or fails, the
+  /// next call continues with the first missing part.
+  Future<void> download(Entry entry,
       {void Function(String template, Map<String, Object?> args, double? progress)? onProgress,
       CancelToken? cancel}) async {
     final token = cancel ?? CancelToken();
@@ -953,33 +961,44 @@ class GroupSession {
       await tmp.rename(progressFile.path);
     }
     token.throwIfCancelled();
+    local.seen.add(entry.id);
+    await persist();
+  }
 
-    final work = await tempDir.createTemp('receive_');
-    try {
-      onProgress?.call('Decrypting…', const {}, null);
-      final zip = p.join(work.path, 'payload.zip');
-      await Delivery.decrypt(blob.path, zip, payload.key, payload.id);
-
-      onProgress?.call('Unpacking…', const {}, null);
-      final stamp = entry.created;
-      String two(int v) => v.toString().padLeft(2, '0');
-      final folderName = Delivery.safeFileName(
-          '${entry.senderName} ${stamp.year}-${two(stamp.month)}-${two(stamp.day)} '
-          '${two(stamp.hour)}${two(stamp.minute)}');
-      var target = Directory(p.join(targetDir.path, folderName));
-      for (var i = 2; await target.exists(); i++) {
-        target = Directory(p.join(targetDir.path, '$folderName ($i)'));
-      }
-      await Delivery.unzipPayload(zip, target.path);
-      local.seen.add(entry.id);
-      await persist();
-      await _deletePartial(entry.id);
-      return target.path;
-    } finally {
-      try {
-        await work.delete(recursive: true);
-      } catch (_) {}
+  /// Decrypts the downloaded [entry] straight into a new folder inside
+  /// [targetDir] (`<sender> <date> <time>`) and returns that folder. Nothing
+  /// is written anywhere else. If the delivery turns out to be damaged, the
+  /// files written so far are deleted again. The encrypted copy stays until
+  /// [deleteDownload] or until the delivery is removed or expires.
+  Future<String> saveFiles(Entry entry, Directory targetDir,
+      {void Function(String template, Map<String, Object?> args, double? progress)? onProgress}) async {
+    if (entry.payload.format != Delivery.payloadFormat) {
+      throw SyncException('This delivery was sent with an older version of RedCourier. Ask the sender to '
+          'send it again.');
     }
+    if (!isDownloaded(entry)) throw SyncException('Download the delivery first.');
+    final blob = File(p.join(_partialFor(entry).path, 'payload.rcb'));
+    onProgress?.call('Decrypting…', const {}, null);
+    final stamp = entry.created;
+    String two(int v) => v.toString().padLeft(2, '0');
+    final folderName = Delivery.safeFileName('${entry.senderName} ${stamp.year}-${two(stamp.month)}-'
+        '${two(stamp.day)} ${two(stamp.hour)}${two(stamp.minute)}');
+    var target = Directory(p.join(targetDir.path, folderName));
+    for (var i = 2; await target.exists(); i++) {
+      target = Directory(p.join(targetDir.path, '$folderName ($i)'));
+    }
+    await Delivery.unpackEncrypted(blob.path, entry.payload.key, entry.payload.id, target.path);
+    return target.path;
+  }
+
+  /// Removes the encrypted copy of [entry] from this device.
+  Future<void> deleteDownload(Entry entry) => _deletePartial(entry.id);
+
+  /// Removes all encrypted copies of this group from this device.
+  Future<void> deleteAllDownloads() async {
+    try {
+      if (await partialDir.exists()) await partialDir.delete(recursive: true);
+    } catch (_) {}
   }
 
   Future<void> _deletePartial(String entryId) async {

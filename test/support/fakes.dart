@@ -53,5 +53,4 @@ class MemDav {
 AppController testController(MemDav dav, Directory dir) => AppController(
       storeFactory: (config) => dav.folders.putIfAbsent(config().url, MemoryStore.new),
       hostingFactory: (_) => Hosting([MemHost('hosta'), MemHost('hostb')], () async => HttpClient()),
-      downloadBase: Directory('${dir.path}/downloads'),
     );

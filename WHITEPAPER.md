@@ -123,9 +123,15 @@ example `entry-key/<entry_id>`, so values cannot be moved to another place.
 ### Deliveries at file sharing services
 
 ```text
-files ──zip──▶ payload.zip ──encrypt──▶ payload.rcb ──split──▶ part_1 … part_n
+files ──container + encrypt (streamed)──▶ payload.rcb ──split──▶ part_1 … part_n
 part_i ──wrap in a ZIP (one entry "redcourier.part")──▶ <random>.zip ──▶ upload
 ```
+
+Inside the encryption the files are stored in a simple container (payload
+format `rcp1`): `"RCP1"`, the number of files, then per file the length of its
+name, the UTF-8 name, the size and the bytes. Names are encrypted like the
+content. The files are read from where the user keeps them and encrypted
+while they are read, so sending never writes a plaintext copy.
 
 The payload is encrypted in 1 MiB chunks with a fresh random key:
 
@@ -174,8 +180,25 @@ Uploads and downloads can be stopped. A stopped upload publishes nothing and
 deletes the parts already uploaded where the host allows it. A download keeps
 every finished part on the device (encrypted, in the group's folder, with a
 small progress file) and continues with the first missing part on the next
-attempt, also after a restart of the app. The partial data is deleted when the
-download completes or the delivery is removed, hidden or expired.
+attempt, also after a restart of the app.
+
+**No plaintext on the device.** A finished download stays encrypted in the
+group's folder (`payload.rcb`, exactly as received). The files are only
+decrypted when the user chooses *Save files to…* and a folder, for example a
+mounted VeraCrypt volume or an encrypted USB drive: decryption and unpacking
+stream straight into that folder, and nothing is written anywhere else. Every
+1 MiB chunk is authenticated before it is written; if the delivery turns out to
+be damaged or forged (a later chunk fails, or it is truncated), the files
+written so far are deleted again. The encrypted copy is removed with *Delete
+from this device*, from the settings, or automatically when the delivery is
+deleted, hidden or expires. Deliveries sent by earlier versions (with a ZIP
+inside the encryption) are refused instead of being unpacked through a
+plaintext temporary file.
+
+What the app cannot control: files the user opens afterwards may leave traces
+(thumbnails, recent-file lists, editor backups), and the operating system may
+write memory to swap or a hibernation file. Saving to an encrypted volume and,
+for high-risk use, Tails (which keeps everything in RAM) address these.
 
 The hosts see only ZIP files with random names and encrypted content, their
 size and the upload and download times (through Tor). They do not see file
@@ -338,8 +361,8 @@ Non-secret settings (language, theme, Tor port) are kept in `settings.json`.
 
 On Tails, the normal data folder is wiped on reboot. The installer therefore
 starts the app with `REDCOURIER_DATA_DIR` pointing into the Persistent Storage
-(`~/Persistent/programs/redcourier/data`). Received files go to the amnesic
-`~/Tor Browser` unless the user chooses to keep them. A copy of the last verified `sync.json` is kept for offline
+(`~/Persistent/programs/redcourier/data`). Received deliveries stay encrypted
+there; the user saves files to a folder of their choice. A copy of the last verified `sync.json` is kept for offline
 viewing and is verified again on load. The app locks itself after five minutes
 in the background.
 

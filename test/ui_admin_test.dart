@@ -39,7 +39,6 @@ void main() {
     final c = AppController(
       storeFactory: (_) => store,
       hostingFactory: testController(dav, tmp).hostingFactory,
-      downloadBase: tmp,
     );
     await pumpApp(t, c, tmp);
     await tapText(t, 'Start a new group');

@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 import 'core/crypto_util.dart';
 import 'core/group.dart';
@@ -29,11 +28,10 @@ class AppController extends ChangeNotifier {
 
   /// The app uses WebDAV, the public file hosts and the system download
   /// folder, all through Tor. Tests pass in-memory replacements.
-  AppController({this.storeFactory, this.hostingFactory, this.downloadBase});
+  AppController({this.storeFactory, this.hostingFactory});
 
   final RemoteStore Function(WebDavConfig Function() config)? storeFactory;
   final Hosting Function(String group)? hostingFactory;
-  final Directory? downloadBase;
 
   AppPhase phase = AppPhase.loading;
   late Directory dataDir;
@@ -378,28 +376,5 @@ class AppController extends ChangeNotifier {
     } else {
       selectGroup(groups.first);
     }
-  }
-
-  /// Folder for received files, one subfolder per group.
-  /// `REDCOURIER_DOWNLOAD_DIR` overrides the base folder (Tails installer).
-  Future<Directory> downloadDir() async {
-    final sub = groupName ?? 'Default';
-    if (downloadBase != null) return Directory(p.join(downloadBase!.path, sub));
-    final override = Platform.environment['REDCOURIER_DOWNLOAD_DIR'];
-    if (override != null && override.trim().isNotEmpty) {
-      return Directory(p.join(override.trim(), sub));
-    }
-    if (Platform.isAndroid) {
-      final shared = Directory('/storage/emulated/0/Download/RedCourier/$sub');
-      try {
-        await shared.create(recursive: true);
-        return shared;
-      } on FileSystemException {
-        final ext = await getExternalStorageDirectory();
-        if (ext != null) return Directory(p.join(ext.path, 'RedCourier', sub));
-      }
-    }
-    final base = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
-    return Directory(p.join(base.path, 'RedCourier', sub));
   }
 }

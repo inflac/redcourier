@@ -76,7 +76,6 @@ void main() {
     final again = await start('alice');
     expect(again.groupName, 'Work');
     expect(again.phase, AppPhase.locked);
-    expect((await c.downloadDir()).path, endsWith(p.join('downloads', 'Work')));
   });
 
   test('a second group, joining, folder reuse and deleting', () async {
@@ -128,7 +127,6 @@ void main() {
     final c = AppController(
       storeFactory: (_) => store,
       hostingFactory: testController(dav, dir).hostingFactory,
-      downloadBase: dir,
     );
     await c.init(dir);
     await c.addGroup('Work', 'alice', pw);

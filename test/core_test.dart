@@ -115,6 +115,12 @@ Future<GroupSession> createWith(Identity admin, RemoteStore store, List<String> 
       rememberAdminKey: (k) async => pending.add(k),
     );
 
+/// Downloads [entry] (kept encrypted) and saves its files into [dir].
+Future<String> receive(GroupSession s, Entry entry, Directory dir) async {
+  await s.download(entry);
+  return s.saveFiles(entry, dir);
+}
+
 Future<String> writeFile(String name, int size) async {
   final f = File(p.join(tmp.path, name));
   await f.writeAsBytes(randomBytes(size));
@@ -283,7 +289,7 @@ void main() {
     expect(entry.totalSize, 3 * 1024 * 1024 + 5 + 1000);
     expect(b.isNew(entry), isTrue);
 
-    final out = await b.download(entry, Directory(p.join(tmp.path, 'dl')));
+    final out = await receive(b, entry, Directory(p.join(tmp.path, 'dl')));
     expect(await File(p.join(out, 'report.pdf')).readAsBytes(), await File(f1).readAsBytes());
     expect(await File(p.join(out, 'notes.txt')).readAsBytes(), await File(f2).readAsBytes());
     expect(b.isNew(entry), isFalse);
@@ -548,6 +554,110 @@ void main() {
     await expectLater(Vault.unlock(dir, 'wrong'), throwsA(isA<WrongPasswordException>()));
   });
 
+  group('no plaintext on the device', () {
+    late Directory src, work, target;
+    late Uint8List key;
+    setUp(() {
+      src = Directory(p.join(tmp.path, 'src'))..createSync();
+      work = Directory(p.join(tmp.path, 'work'))..createSync();
+      target = Directory(p.join(tmp.path, 'vault-volume'));
+      key = randomBytes(32);
+    });
+
+    List<String> files() {
+      final a = File(p.join(src.path, 'report.pdf'))..writeAsBytesSync(randomBytes(3 * 1024 * 1024 + 17));
+      final b = File(p.join(src.path, 'Ünïcode name.txt'))..writeAsStringSync('secret plan');
+      final c = File(p.join(src.path, 'empty.bin'))..writeAsBytesSync([]);
+      // Same name from another folder.
+      final d = File(p.join((Directory(p.join(src.path, 'other'))..createSync()).path, 'report.pdf'))
+        ..writeAsStringSync('second report');
+      return [a.path, b.path, c.path, d.path];
+    }
+
+    test('packing writes only the encrypted blob, saving writes only into the target', () async {
+      final paths = files();
+      final blob = p.join(work.path, 'payload.rcb');
+      await Delivery.packEncrypted(paths, blob, key, 'pid');
+      expect(work.listSync().map((e) => p.basename(e.path)), ['payload.rcb']);
+      final raw = File(blob).readAsBytesSync();
+      expect(utf8.decode(raw, allowMalformed: true), isNot(contains('secret plan')));
+      expect(utf8.decode(raw, allowMalformed: true), isNot(contains('report.pdf')), reason: 'names are encrypted too');
+
+      final written = await Delivery.unpackEncrypted(blob, key, 'pid', target.path);
+      expect(work.listSync(), hasLength(1), reason: 'no temporary plaintext next to the blob');
+      expect(written.map(p.basename), ['report.pdf', 'Ünïcode name.txt', 'empty.bin', 'report (2).pdf']);
+      for (var i = 0; i < paths.length; i++) {
+        expect(File(written[i]).readAsBytesSync(), File(paths[i]).readAsBytesSync());
+      }
+    });
+
+    test('a damaged or foreign blob leaves no files in the target', () async {
+      final blob = p.join(work.path, 'payload.rcb');
+      await Delivery.packEncrypted(files(), blob, key, 'pid');
+      final bytes = File(blob).readAsBytesSync();
+
+      // Last chunk damaged: the first files were already written, then removed.
+      final damaged = Uint8List.fromList(bytes)..[bytes.length - 3] ^= 1;
+      File(blob).writeAsBytesSync(damaged);
+      await expectLater(Delivery.unpackEncrypted(blob, key, 'pid', target.path), throwsA(isA<CryptoException>()));
+      expect(target.existsSync(), isFalse);
+
+      // Cut off after the first chunk (truncation).
+      File(blob).writeAsBytesSync(bytes.sublist(0, BlobCrypto.headerLength + BlobCrypto.defaultChunkSize + 16));
+      await expectLater(Delivery.unpackEncrypted(blob, key, 'pid', target.path), throwsA(isA<CryptoException>()));
+      expect(target.existsSync(), isFalse);
+
+      // Wrong key or swapped blob id.
+      File(blob).writeAsBytesSync(bytes);
+      await expectLater(Delivery.unpackEncrypted(blob, randomBytes(32), 'pid', target.path),
+          throwsA(isA<CryptoException>()));
+      await expectLater(Delivery.unpackEncrypted(blob, key, 'other', target.path), throwsA(isA<CryptoException>()));
+      expect(target.existsSync(), isFalse);
+
+      // An existing target folder is kept, only the new files are removed.
+      target.createSync();
+      File(p.join(target.path, 'mine.txt')).writeAsStringSync('keep');
+      File(blob).writeAsBytesSync(damaged);
+      await expectLater(Delivery.unpackEncrypted(blob, key, 'pid', target.path), throwsA(isA<CryptoException>()));
+      expect(target.listSync().map((e) => p.basename(e.path)), ['mine.txt']);
+    });
+
+    test('downloads stay encrypted until the user saves them', () async {
+      final store = MemoryStore();
+      final alice = await Identity.generate('alice');
+      final bob = await Identity.generate('bob');
+      final a = await createGroup(alice, store);
+      await a.addMember(bob.joinRequest);
+      final b = await joinGroup(bob, store, a.fingerprint);
+      final f = await writeFile('plan.txt', 0);
+      File(f).writeAsStringSync('the secret plan');
+      await a.send(recipientIds: [bob.userId], paths: [f], note: '', lifetime: const Duration(days: 1));
+      await b.sync();
+      final entry = b.inbox.single;
+
+      await expectLater(b.saveFiles(entry, target), throwsA(isA<SyncException>()), reason: 'not downloaded');
+      await b.download(entry);
+      expect(b.isDownloaded(entry), isTrue);
+      // Nothing readable anywhere in the app's folders.
+      for (final file in tmp.listSync(recursive: true).whereType<File>()) {
+        if (p.isWithin(src.path, file.path) || file.path == f) continue;
+        expect(utf8.decode(file.readAsBytesSync(), allowMalformed: true), isNot(contains('the secret plan')),
+            reason: file.path);
+      }
+      final out = await b.saveFiles(entry, target);
+      expect(p.isWithin(target.path, out), isTrue);
+      expect(File(p.join(out, 'plan.txt')).readAsStringSync(), 'the secret plan');
+
+      await b.deleteDownload(entry);
+      expect(b.isDownloaded(entry), isFalse);
+    });
+
+    test('deliveries of earlier versions (ZIP inside) are not unpacked', () {
+      final legacy = DeliveryPayload('a' * 32, randomBytes(32), [], 'zip');
+      expect(legacy.format, isNot(Delivery.payloadFormat));
+    });
+  });
+
   test('file names from other users are sanitized', () {
     expect(Delivery.safeFileName('../../etc/passwd'), '_.._etc_passwd');
     expect(Delivery.safeFileName(r'C:\evil.exe'), 'C__evil.exe');
@@ -576,7 +686,7 @@ void main() {
       expect(hostA.uploads, 0);
       expect(hostB.uploads, greaterThan(1));
       await b.sync();
-      final out = await b.download(b.inbox.single, Directory(p.join(tmp.path, 'dl')));
+      final out = await receive(b, b.inbox.single, Directory(p.join(tmp.path, 'dl')));
       expect(await File(p.join(out, 'big.bin')).readAsBytes(), await File(f).readAsBytes());
     });
 
@@ -597,7 +707,7 @@ void main() {
       final url = FakeHost.files.keys.single;
       FakeHost.files[url] = Uint8List.fromList([...FakeHost.files[url]!]..[100] ^= 1);
       await b.sync();
-      await expectLater(b.download(b.inbox.single, Directory(p.join(tmp.path, 'dl'))),
+      await expectLater(receive(b, b.inbox.single, Directory(p.join(tmp.path, 'dl'))),
           throwsA(isA<HostException>()));
     });
 
@@ -606,7 +716,7 @@ void main() {
       await a.send(recipientIds: [bob.userId], paths: [f], note: '', lifetime: const Duration(days: 1));
       FakeHost.files.clear();
       await b.sync();
-      await expectLater(b.download(b.inbox.single, Directory(p.join(tmp.path, 'dl'))),
+      await expectLater(receive(b, b.inbox.single, Directory(p.join(tmp.path, 'dl'))),
           throwsA(isA<HostException>()));
     });
 
@@ -651,7 +761,7 @@ void main() {
           tempDir: tmp);
       await b1.sync();
       for (final entry in b1.inbox) {
-        final out = await b1.download(entry, Directory(p.join(tmp.path, 'dl')));
+        final out = await receive(b1, entry, Directory(p.join(tmp.path, 'dl')));
         final name = entry.files.single.name;
         expect(await File(p.join(out, name)).readAsBytes(),
             await File(name == 'mid.bin' ? f : big).readAsBytes());
@@ -666,15 +776,15 @@ void main() {
       final entry = b.inbox.single;
       expect(entry.payload.parts.length, 3);
       hostB.failDownload = true;
-      await expectLater(b.download(entry, Directory(p.join(tmp.path, 'dl'))), throwsA(isA<HostException>()));
+      await expectLater(receive(b, entry, Directory(p.join(tmp.path, 'dl'))), throwsA(isA<HostException>()));
       expect(b.partialParts(entry), 1);
       expect(hostA.downloads, 1);
 
       hostB.failDownload = false;
-      final out = await b.download(entry, Directory(p.join(tmp.path, 'dl')));
+      final out = await receive(b, entry, Directory(p.join(tmp.path, 'dl')));
       expect(await File(p.join(out, 'big.bin')).readAsBytes(), await File(f).readAsBytes());
       expect(hostA.downloads + hostB.downloads, 3, reason: 'no part is downloaded twice');
-      expect(b.partialParts(entry), isNull);
+      expect(b.isDownloaded(entry), isTrue, reason: 'the encrypted copy stays until it is deleted');
     });
 
     test('a cancelled download keeps its parts and can be resumed', () async {
@@ -684,12 +794,12 @@ void main() {
       final entry = b.inbox.single;
       final token = CancelToken();
       await expectLater(
-          b.download(entry, Directory(p.join(tmp.path, 'dl')), cancel: token, onProgress: (t, args, _) {
+          b.download(entry, cancel: token, onProgress: (t, args, _) {
             if (args['i'] == 2) token.cancel();
           }),
           throwsA(isA<CancelledException>()));
       expect(b.partialParts(entry), 2);
-      final out = await b.download(entry, Directory(p.join(tmp.path, 'dl')));
+      final out = await receive(b, entry, Directory(p.join(tmp.path, 'dl')));
       expect(await File(p.join(out, 'big.bin')).readAsBytes(), await File(f).readAsBytes());
       expect(hostA.downloads + hostB.downloads, 3);
     });
@@ -719,7 +829,7 @@ void main() {
       await b.sync();
       final entry = b.inbox.single;
       hostB.failDownload = true;
-      await expectLater(b.download(entry, Directory(p.join(tmp.path, 'dl'))), throwsA(isA<HostException>()));
+      await expectLater(receive(b, entry, Directory(p.join(tmp.path, 'dl'))), throwsA(isA<HostException>()));
       expect(b.partialParts(entry), 1);
       await b.hide(entry);
       expect(b.partialParts(entry), isNull);

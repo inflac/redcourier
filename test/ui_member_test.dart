@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:redcourier/app_controller.dart';
 import 'package:redcourier/core/crypto_util.dart';
 import 'package:redcourier/core/identity.dart';
+import 'package:redcourier/ui/folder_picker.dart';
 
 import 'support/fakes.dart';
 import 'support/ui.dart';
@@ -82,9 +84,27 @@ void main() {
     expect(find.text('read this'), findsOneWidget);
     expect(find.text('new'), findsOneWidget);
     await tapText(t, 'Download');
+    // Downloaded means: encrypted on the device, nothing readable yet.
+    await waitFor(t, find.text('Downloaded, encrypted on this device'));
+    for (final f in bobDir.listSync(recursive: true).whereType<File>()) {
+      expect(f.readAsStringSync(encoding: latin1), isNot(contains('the plan')), reason: f.path);
+    }
+    // Saving asks for a folder (an encrypted volume in real life).
+    final volume = Directory(p.join(tmp.path, 'volume'))..createSync();
+    String? asked;
+    pickFolder = (label) async {
+      asked = label;
+      return volume.path;
+    };
+    addTearDown(() => pickFolder = (_) async => null);
+    await tapText(t, 'Save files to…');
     await waitFor(t, find.textContaining('Saved to'));
-    final saved = Directory(p.join(bobDir.path, 'downloads', 'Work')).listSync(recursive: true).whereType<File>();
+    expect(asked, 'Save here');
+    final saved = volume.listSync(recursive: true).whereType<File>();
     expect(saved.single.readAsStringSync(), 'the plan');
+    await tapText(t, 'Delete from this device');
+    await waitFor(t, find.text('The encrypted copy was deleted from this device.'));
+    expect(find.text('Download'), findsOneWidget);
 
     await t.tap(find.byType(PopupMenuButton<String>).first);
     await t.pumpAndSettle();

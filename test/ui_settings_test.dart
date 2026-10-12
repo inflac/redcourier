@@ -58,7 +58,6 @@ void main() {
     final c = AppController(
       storeFactory: (config) => PasswordStore(config, backing, () => serverPassword),
       hostingFactory: testController(dav, tmp).hostingFactory,
-      downloadBase: tmp,
     );
     await t.runAsync(() async {
       await c.init(tmp);
@@ -177,7 +176,7 @@ void main() {
     expect(c.session!.local.webdav.password, 'new-secret');
 
     // Downloads, locking, switching.
-    await tapText(t, 'Delete downloaded files');
+    await tapText(t, 'Delete downloaded deliveries');
     await t.pumpAndSettle();
     await tapText(t, 'Delete');
     await waitFor(t, find.text('Downloads deleted.'));

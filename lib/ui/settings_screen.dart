@@ -99,18 +99,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _clearDownloads() async {
-    final dir = await widget.app.downloadDir();
-    if (!mounted) return;
     final ok = await confirm(
-        context, tr('Delete downloaded files?'), tr('This deletes everything in\n{path}', {'path': dir.path}),
-        action: tr('Delete'), danger: true);
+        context,
+        tr('Delete downloaded deliveries?'),
+        tr('This deletes the encrypted copies of all downloaded deliveries of this group from this device. '
+            'Files you saved to a folder are not touched.'),
+        action: tr('Delete'),
+        danger: true);
     if (!ok) return;
-    try {
-      if (await dir.exists()) await dir.delete(recursive: true);
-      AppNotifier.showInfo(tr('Downloads deleted.'));
-    } catch (e) {
-      AppNotifier.showError(tr('Could not delete: {reason}', {'reason': errorMessage(e)}));
-    }
+    await widget.app.run((s) => s.deleteAllDownloads());
+    AppNotifier.showInfo(tr('Downloads deleted.'));
   }
 
   Future<void> _deleteGroup() async {
@@ -284,7 +282,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   OutlinedButton.icon(
                     onPressed: _clearDownloads,
                     icon: const Icon(Icons.folder_delete_outlined),
-                    label: Text(tr('Delete downloaded files')),
+                    label: Text(tr('Delete downloaded deliveries')),
                   ),
                   const SizedBox(height: 8),
                   OutlinedButton.icon(

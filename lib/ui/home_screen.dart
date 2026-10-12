@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 
@@ -12,6 +13,7 @@ import '../core/messages.dart';
 import '../i18n.dart';
 import '../notifications.dart';
 import '../theme.dart';
+import 'folder_picker.dart';
 import 'members_screen.dart';
 import 'qr_scan.dart';
 import 'send_screen.dart';
@@ -170,12 +172,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _cancels[entry.id] = token;
     });
     try {
-      final dir = await widget.app.downloadDir();
-      final path = await widget.app
-          .run((s) => s.download(entry, dir, cancel: token, onProgress: (template, args, progress) {
-                if (mounted) setState(() => _downloads[entry.id] = (tr(template, args), progress));
-              }));
-      AppNotifier.showSuccess(tr('Saved to {path}', {'path': path}));
+      await widget.app.run((s) => s.download(entry, cancel: token, onProgress: (template, args, progress) {
+            if (mounted) setState(() => _downloads[entry.id] = (tr(template, args), progress));
+          }));
+      AppNotifier.showSuccess(tr('Downloaded. It stays encrypted on this device until you save the files.'));
     } on CancelledException {
       AppNotifier.showInfo(tr('Download paused. Finished parts are kept, you can resume later.'));
     } catch (e) {
@@ -193,6 +193,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   void _cancelDownload(Entry entry) => _cancels[entry.id]?.cancel();
+
+  /// Decrypts a downloaded delivery into a folder the user picks, for
+  /// example an encrypted volume. Plaintext is written only there.
+  Future<void> _save(Entry entry) async {
+    final folder = await pickFolder(tr('Save here'));
+    if (folder == null || !mounted) return;
+    setState(() => _downloads[entry.id] = (tr('Decrypting…'), null));
+    try {
+      final path = await widget.app.run((s) => s.saveFiles(entry, Directory(folder)));
+      AppNotifier.showSuccess(tr('Saved to {path}', {'path': path}));
+    } catch (e) {
+      AppNotifier.showError(tr('Saving failed: {reason}', {'reason': errorMessage(e)}));
+    } finally {
+      if (mounted) setState(() => _downloads.remove(entry.id));
+    }
+  }
+
+  Future<void> _deleteDownload(Entry entry) async {
+    await widget.app.run((s) => s.deleteDownload(entry));
+    AppNotifier.showInfo(tr('The encrypted copy was deleted from this device.'));
+  }
 
   Future<void> _delete(Entry entry) async {
     final ok = await confirm(
@@ -348,6 +369,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 downloads: _downloads,
                 onDownload: _download,
                 onCancel: _cancelDownload,
+                onSave: _save,
+                onDeleteDownload: _deleteDownload,
                 onDelete: _delete,
                 onHide: _hide,
               ),
@@ -363,6 +386,8 @@ class _EntryCard extends StatelessWidget {
   final Map<String, (String, double?)> downloads;
   final Future<void> Function(Entry) onDownload;
   final void Function(Entry) onCancel;
+  final Future<void> Function(Entry) onSave;
+  final Future<void> Function(Entry) onDeleteDownload;
   final Future<void> Function(Entry) onDelete;
   final Future<void> Function(Entry) onHide;
 
@@ -373,6 +398,8 @@ class _EntryCard extends StatelessWidget {
     required this.downloads,
     required this.onDownload,
     required this.onCancel,
+    required this.onSave,
+    required this.onDeleteDownload,
     required this.onDelete,
     required this.onHide,
   });
@@ -448,6 +475,29 @@ class _EntryCard extends StatelessWidget {
                 tooltip: tr('Stop download'),
                 icon: const Icon(Icons.stop_circle_outlined),
                 onPressed: () => onCancel(entry),
+              ),
+            ]),
+          ] else if (!sentView && session.isDownloaded(entry)) ...[
+            const SizedBox(height: 8),
+            Row(children: [
+              Icon(Icons.lock_outline, size: 18, color: palette.fgDim),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(tr('Downloaded, encrypted on this device'),
+                    style: TextStyle(color: palette.fgDim, fontSize: 13)),
+              ),
+            ]),
+            const SizedBox(height: 8),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              FilledButton.tonalIcon(
+                onPressed: () => onSave(entry),
+                icon: const Icon(Icons.folder_open),
+                label: Text(tr('Save files to…')),
+              ),
+              TextButton.icon(
+                onPressed: () => onDeleteDownload(entry),
+                icon: const Icon(Icons.delete_outline),
+                label: Text(tr('Delete from this device')),
               ),
             ]),
           ] else if (!sentView) ...[

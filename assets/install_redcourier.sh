@@ -252,20 +252,9 @@ if [ -n "$VERIFIED_KEY" ]; then
   rm -rf "$(dirname "$VERIFIED_KEY")"
 fi
 
-# Where received files go. Keep the previous answer on updates.
-SETTINGS="$INSTALL_DIR/settings.env"
-DOWNLOAD_DIR=""
-[ -f "$SETTINGS" ] && DOWNLOAD_DIR="$(sed -n 's/^DOWNLOAD_DIR=//p' "$SETTINGS")"
-if [ -z "$DOWNLOAD_DIR" ]; then
-  echo
-  echo "Received files are saved to ~/Tor Browser by default and are gone after a reboot."
-  if ask "Keep received files across reboots in ~/Persistent/RedCourier instead? [y/N]:" N; then
-    DOWNLOAD_DIR="$HOME/Persistent/RedCourier"
-  else
-    DOWNLOAD_DIR="$HOME/Tor Browser/RedCourier"
-  fi
-  echo "DOWNLOAD_DIR=$DOWNLOAD_DIR" > "$SETTINGS"
-fi
+# Received deliveries stay encrypted in the data folder; the user picks a
+# folder (for example a VeraCrypt volume) for each delivery in the app.
+rm -f "$INSTALL_DIR/settings.env"  # used by earlier versions
 
 echo "[*] Creating menu entry..."
 mkdir -p "$SESSION_APPS"
@@ -280,7 +269,7 @@ cat > "$target" <<EOF
 Type=Application
 Name=RedCourier
 Comment=End-to-end encrypted file delivery over Tor
-Exec=env REDCOURIER_DATA_DIR="$DATA_DIR" REDCOURIER_DOWNLOAD_DIR="$DOWNLOAD_DIR" REDCOURIER_INSTALL_DIR="$INSTALL_DIR" "$INSTALL_DIR/app/AppRun"
+Exec=env REDCOURIER_DATA_DIR="$DATA_DIR" REDCOURIER_INSTALL_DIR="$INSTALL_DIR" "$INSTALL_DIR/app/AppRun"
 Icon=$INSTALL_DIR/icon.png
 Terminal=false
 Categories=Network;FileTransfer;
@@ -310,7 +299,7 @@ echo "  2. Send your join request to the group's admin, or start a new group as 
 echo "  3. Paste the invite you receive from the admin."
 echo
 echo "Your groups and keys are stored in: $DATA_DIR"
-echo "Received files are saved to:       $DOWNLOAD_DIR"
+echo "Received deliveries stay encrypted until you save them to a folder you choose."
 echo
 echo "To update later, unpack the new package and run THIS installed copy:"
 echo "  $INSTALL_DIR/install_redcourier.sh /path/to/redcourier-<version>-linux-x86_64"
