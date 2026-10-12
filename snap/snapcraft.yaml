@@ -1,6 +1,6 @@
 name: redcourier
 base: core22
-version: '0.0.3'
+version: '0.0.4'
 summary: End-to-end encrypted file delivery for small groups, over Tor
 description: |
   RedCourier sends end-to-end encrypted files to the members of a group.
