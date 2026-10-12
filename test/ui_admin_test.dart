@@ -176,7 +176,7 @@ void main() {
       await t.pumpAndSettle();
       await enter(t, 'Join request (RCJOIN2:…)', 'nonsense');
       await tapText(t, 'Continue');
-      expect(find.text('Not a Red Courier join request.'), findsNothing);
+      expect(find.text('Not a RedCourier join request.'), findsOneWidget);
       await enter(t, 'Join request (RCJOIN2:…)', who.joinRequest.encode());
       await tapText(t, 'Continue');
       await t.pumpAndSettle();
