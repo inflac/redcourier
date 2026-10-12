@@ -196,18 +196,17 @@ jobs:
           flutter pub get
           flutter build windows --release
 
-      - name: Package
+      - name: Installer (Inno Setup)
         shell: pwsh
         run: |
-          $name = "RedCourier-${{ needs.check.outputs.version }}-windows-x64"
-          New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item -Recurse build\windows\x64\runner\Release "dist\$name"
-          Compress-Archive -Path "dist\$name" -DestinationPath "dist\$name.zip"
+          choco install innosetup --version=6.7.1 -y --no-progress
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=${{ needs.check.outputs.version }} windows\installer\redcourier.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - uses: actions/upload-artifact@v7
         with:
           name: windows
-          path: dist/*.zip
+          path: dist/*-setup.exe
           if-no-files-found: error
 
   release:
@@ -224,11 +223,11 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: Sign APK and Windows zip
+      - name: Sign APK and Windows installer
         env:
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
           RELEASE_SIGNING_KEY_PASSWORD: ${{ secrets.RELEASE_SIGNING_KEY_PASSWORD }}
-        run: scripts/sign_files.sh dist/*.apk dist/*-windows-x64.zip
+        run: scripts/sign_files.sh dist/*.apk dist/*-windows-x64-setup.exe
 
       - name: Checksums
         run: |
