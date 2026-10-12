@@ -8,7 +8,6 @@ End-to-end encrypted file delivery for small groups. No own server is needed:
   public file sharing services (filebin.net, temp.sh, litterbox, and termbin
   for very small deliveries),
 - all traffic goes through Tor.
-
 - Choose one or more recipients by their identifier and send files with a note.
 - Recipients see new deliveries with sender and size the next time they open the
   app, and download them with one tap. While a group is unlocked, the app syncs
