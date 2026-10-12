@@ -104,13 +104,24 @@ void main() {
     expect(formatRemaining(DateTime.now().add(const Duration(days: 1, hours: 2))), 'expires in 1 day');
     expect(formatRemaining(DateTime.now().add(const Duration(days: 3, hours: 2))), 'expires in 3 days');
 
-    AppLogger.init(isEnabled: true);
-    AppLogger.debug('d', 1);
-    AppLogger.info('i', 2);
-    AppLogger.warn('w', 3);
-    AppLogger.error('e', StateError('x'), StackTrace.current);
-    AppLogger.init(isEnabled: false);
-    AppLogger.info('silent');
+    // Capture the log instead of printing it (it contains a sample error).
+    final logged = <String>[];
+    final print = debugPrint;
+    debugPrint = (message, {wrapWidth}) => logged.add(message ?? '');
+    try {
+      AppLogger.init(isEnabled: true);
+      AppLogger.debug('d', 1);
+      AppLogger.info('i', 2);
+      AppLogger.warn('w', 3);
+      AppLogger.error('e', StateError('sample'), StackTrace.current);
+      AppLogger.init(isEnabled: false);
+      AppLogger.info('silent');
+    } finally {
+      debugPrint = print;
+    }
+    expect(logged.where((l) => l.contains('[DEBUG]') || l.contains('[INFO]') || l.contains('[WARN]')), hasLength(3));
+    expect(logged.any((l) => l.contains('sample')), isTrue);
+    expect(logged.any((l) => l.contains('silent')), isFalse);
 
     late bool answer;
     await t.pumpWidget(host(Builder(
