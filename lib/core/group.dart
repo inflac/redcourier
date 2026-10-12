@@ -962,8 +962,9 @@ class GroupSession {
   }
 
   /// Decrypts the downloaded [entry] straight into a new folder inside
-  /// [targetDir] (`<sender> <date> <time>`) and returns that folder. Nothing
-  /// is written anywhere else. If the delivery turns out to be damaged, the
+  /// [targetDir] (`<date> <time>`) and returns that folder. The folder name
+  /// leaves out the sender, so the identifier never appears unencrypted
+  /// outside the app. Nothing is written anywhere else. If the delivery turns out to be damaged, the
   /// files written so far are deleted again. The encrypted copy stays until
   /// [deleteDownload] or until the delivery is removed or expires.
   Future<String> saveFiles(Entry entry, Directory targetDir,
@@ -976,8 +977,7 @@ class GroupSession {
     onProgress?.call('Decrypting…', const {}, null);
     final stamp = entry.created;
     String two(int v) => v.toString().padLeft(2, '0');
-    final folderName = Delivery.safeFileName('${entry.senderName} ${stamp.year}-${two(stamp.month)}-'
-        '${two(stamp.day)} ${two(stamp.hour)}${two(stamp.minute)}');
+    final folderName = '${stamp.year}-${two(stamp.month)}-${two(stamp.day)} ${two(stamp.hour)}${two(stamp.minute)}';
     var target = Directory(p.join(targetDir.path, folderName));
     for (var i = 2; await target.exists(); i++) {
       target = Directory(p.join(targetDir.path, '$folderName ($i)'));

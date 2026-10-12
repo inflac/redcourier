@@ -635,6 +635,7 @@ void main() {
       }
       final out = await b.saveFiles(entry, target);
       expect(p.isWithin(target.path, out), isTrue);
+      expect(p.basename(out), matches(RegExp(r'^\d{4}-\d\d-\d\d \d{4}$')), reason: 'no sender in the folder name');
       expect(File(p.join(out, 'plan.txt')).readAsStringSync(), 'the secret plan');
 
       await b.deleteDownload(entry);
