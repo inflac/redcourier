@@ -374,8 +374,18 @@ What the installer can and cannot protect:
   is installed. Only then is the AppImage run, to unpack itself
   (`--appimage-extract`, Tails has no FUSE) inside the install folder. The
   `app` folder is swapped by renaming, so a failure leaves the installed
-  version in place; the previous version is deleted on the next start. The
-  release channel is either the GitHub Releases API of the project or a custom
+  version in place; the previous version is deleted on the next start. On
+  Windows (installed with the setup file) the app downloads
+  `RedCourier-<version>-windows-x64-setup.exe` and its `.sig` the same way,
+  verifies it and runs it silently (`/VERYSILENT /CLOSEAPPLICATIONS`); the
+  per-user installer needs no administrator rights, replaces the program and
+  starts it again. A copied or self-built Windows program (no uninstaller next
+  to it) does not update itself. On Android, an APK installed from GitHub
+  downloads `RedCourier-<version>.apk` and its `.sig`, verifies it and hands it
+  to the system package installer, which additionally requires the same APK
+  signing key as the installed app and the user's confirmation. If the app was
+  installed by F-Droid or a store, the in-app update is disabled. The release
+  channel is either the GitHub Releases API of the project or a custom
   URL returning the same JSON; it only needs to be trusted for availability,
   not for integrity, because the key comes with the installed app.
 - **The first installation** runs the installer from the downloaded package.

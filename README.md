@@ -78,6 +78,18 @@ a valid signature nothing is installed. It then unpacks the new version next
 to the installed one, swaps the `app` folder and restarts. The previous
 version is deleted on the next start.
 
+The Windows version installed with the setup file updates itself the same
+way: it downloads the new `…-windows-x64-setup.exe` and its `.sig`, checks the
+signature and runs the installer silently, which replaces the program and
+starts it again.
+
+On Android, an APK installed from the GitHub releases checks for updates the
+same way, downloads `RedCourier-<version>.apk` and its `.sig` and checks the
+signature. It then hands the APK to Android, which checks that it is signed
+with the same key and asks you to confirm. The first time, Android asks you to
+allow RedCourier to install apps. Installs from F-Droid or a store are updated
+there; the in-app update is off for them.
+
 > [!IMPORTANT]
 > Start RedCourier from the menu entry. It needs the entry's settings to store
 > its data in the Persistent Storage. The app talks to Tor's SOCKS port itself;
@@ -113,6 +125,18 @@ published.
 > Updates must be signed with the same key. If the installer reports a
 > different key, stop and confirm the new fingerprint through a channel you
 > trust before continuing.
+
+## Install on Windows
+
+Download `RedCourier-<version>-windows-x64-setup.exe` from the releases and run
+it. It installs for the current user only (no administrator rights) to
+`%LOCALAPPDATA%\Programs\RedCourier` and adds a Start menu entry and an
+uninstaller. Uninstalling keeps your groups and keys; delete groups in the app
+first if you want them gone.
+
+Windows shows a SmartScreen warning ("unknown publisher") because the program
+is not signed with a paid Windows certificate. Check the download with its
+`.sig` as described above.
 
 ## Getting started
 
@@ -213,7 +237,7 @@ The workflow runs the tests, then builds on GitHub's machines:
 | --- | --- |
 | Linux / Tails | `redcourier-<version>-linux-x86_64.zip` (+ `.sig`), `RedCourier-<version>-x86_64.AppImage` (+ `.sig`, for the in-app updater) |
 | Android | `RedCourier-<version>.apk` (+ `.sig`) |
-| Windows | `RedCourier-<version>-windows-x64.zip` (+ `.sig`) |
+| Windows | `RedCourier-<version>-windows-x64-setup.exe` (+ `.sig`) |
 
 plus `SHA256SUMS.txt`. The release is only created when every platform
 built. `appimagetool` and the AppImage runtime are pinned by version and
