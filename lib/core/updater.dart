@@ -9,19 +9,29 @@ import 'crypto_util.dart';
 import 'messages.dart';
 import 'release_key.dart';
 
-/// Self-update for installations made with the Tails installer, the same way
-/// CalSec updates itself:
+/// Self-update for installed versions, the same way CalSec updates itself:
 ///
 ///  1. ask the release channel (GitHub Releases API or a compatible URL) for
 ///     the latest release,
-///  2. download `RedCourier-<version>-x86_64.AppImage` and its `.sig` from
-///     that release through Tor,
-///  3. verify the Ed25519 signature over the downloaded AppImage with the
-///     release key built into this app (fail closed: no signature, a damaged
-///     or a wrong one means no update),
-///  4. unpack it next to the installed copy (Tails has no FUSE, so the app
-///     runs unpacked) and swap the `app` folder,
-///  5. start the new version and exit.
+///  2. download the file for this platform and its `.sig` from that release
+///     through Tor:
+///     - Tails/Linux: `RedCourier-<version>-x86_64.AppImage`
+///     - Windows: `RedCourier-<version>-windows-x64-setup.exe`
+///     - Android: `RedCourier-<version>.apk`
+///  3. verify the Ed25519 signature over the downloaded file with the release
+///     key built into this app (fail closed: no signature, a damaged or a
+///     wrong one means no update),
+///  4. install it:
+///     - Linux: unpack the AppImage next to the installed copy (Tails has no
+///       FUSE, so the app runs unpacked) and swap the `app` folder, then
+///       start the new version;
+///     - Windows: run the verified installer silently. It replaces the
+///       program (per user, no administrator rights) and starts it again,
+///     - Android: hand the verified APK to the system installer, which checks
+///       that it is signed with the same key and asks the user to confirm.
+///       Only for APKs from GitHub; F-Droid and stores update the app
+///       themselves (see [selfUpdateAllowed]),
+///  5. exit (desktop) or wait for the user (Android).
 
 const officialUpdateChannel = 'https://api.github.com/repos/inflac/redcourier/releases/latest';
 
@@ -40,10 +50,34 @@ class UpdateInfo {
 /// Unpacks an AppImage into a folder and returns the unpacked app folder.
 typedef AppImageExtractor = Future<Directory> Function(File appImage, Directory work);
 
-/// Where the Tails installer put the app, or null if it was not installed
-/// that way (then self-update is not available, like CalSec outside frozen
-/// builds).
+/// The kinds of installation that can update themselves.
+enum UpdatePlatform { linux, windows, android }
+
+UpdatePlatform? get currentUpdatePlatform => Platform.isLinux
+    ? UpdatePlatform.linux
+    : Platform.isWindows
+        ? UpdatePlatform.windows
+        : Platform.isAndroid
+            ? UpdatePlatform.android
+            : null;
+
+/// Android: the app may update itself only if it was installed from a
+/// downloaded APK (system package installer, adb, or an earlier in-app
+/// update). Installs from F-Droid or a store are updated by those.
+bool selfUpdateAllowed(String? installerPackage, String ownPackage) =>
+    installerPackage == null ||
+    installerPackage == ownPackage ||
+    const {
+      'com.android.packageinstaller',
+      'com.google.android.packageinstaller',
+      'com.android.shell',
+    }.contains(installerPackage);
+
+/// Where the app was installed, or null if it was not installed by one of
+/// our installers (then self-update is not available, like CalSec outside
+/// frozen builds).
 String? installedDir() {
+  if (Platform.isWindows) return windowsInstallDir(Platform.resolvedExecutable);
   if (!Platform.isLinux) return null;
   final dir = Platform.environment['REDCOURIER_INSTALL_DIR'];
   if (dir == null || dir.isEmpty) return null;
@@ -51,14 +85,30 @@ String? installedDir() {
   return dir;
 }
 
+/// The Windows installer (Inno Setup) puts its uninstaller next to the
+/// program; a copied or self-built program has none and is not updated.
+String? windowsInstallDir(String executable) {
+  final dir = p.dirname(executable);
+  return File(p.join(dir, 'unins000.exe')).existsSync() ? dir : null;
+}
+
 class Updater {
   static const maxDownloadBytes = 1024 * 1024 * 1024;
-  static final _assetName = RegExp(r'^RedCourier-(\d+(?:\.\d+)*)-x86_64\.AppImage$');
+
+  /// Release file names per platform; group 1 is the version.
+  static RegExp assetPattern(UpdatePlatform platform) => switch (platform) {
+        UpdatePlatform.linux => RegExp(r'^RedCourier-(\d+(?:\.\d+)*)-x86_64\.AppImage$'),
+        UpdatePlatform.windows => RegExp(r'^RedCourier-(\d+(?:\.\d+)*)-windows-x64-setup\.exe$'),
+        UpdatePlatform.android => RegExp(r'^RedCourier-(\d+(?:\.\d+)*)\.apk$'),
+      };
 
   final String currentVersion;
   final String channel;
   final Future<HttpClient> Function() clientFactory;
   final Uint8List publicKey;
+
+  /// Which release file to look for.
+  final UpdatePlatform platform;
 
   /// Only tests turn this off to talk to a local plain-HTTP server.
   final bool requireHttps;
@@ -68,19 +118,16 @@ class Updater {
     required this.clientFactory,
     String? channel,
     String publicKeyPem = releasePublicKeyPem,
+    UpdatePlatform? platform,
     this.requireHttps = true,
-  })  : channel = (channel == null || channel.isEmpty || channel == 'official')
-            ? officialUpdateChannel
-            : channel,
+  })  : platform = platform ?? currentUpdatePlatform ?? UpdatePlatform.linux,
+        channel =
+            (channel == null || channel.isEmpty || channel == 'official') ? officialUpdateChannel : channel,
         publicKey = ed25519KeyFromPem(publicKeyPem);
 
   /// Raw 32-byte key from a SubjectPublicKeyInfo PEM of an Ed25519 key.
   static Uint8List ed25519KeyFromPem(String pem) {
-    final body = pem
-        .split('\n')
-        .where((l) => !l.startsWith('-----'))
-        .join()
-        .replaceAll(RegExp(r'\s'), '');
+    final body = pem.split('\n').where((l) => !l.startsWith('-----')).join().replaceAll(RegExp(r'\s'), '');
     final der = base64.decode(body);
     const prefix = [0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00];
     if (der.length != 44 || !List.generate(12, (i) => der[i] == prefix[i]).every((x) => x)) {
@@ -107,9 +154,7 @@ class Updater {
   }
 
   Future<HttpClientResponse> _get(HttpClient c, Uri uri, {bool json = false}) async {
-    if (requireHttps &&
-        uri.scheme != 'https' &&
-        !(uri.host.endsWith('.onion') && uri.scheme == 'http')) {
+    if (requireHttps && uri.scheme != 'https' && !(uri.host.endsWith('.onion') && uri.scheme == 'http')) {
       throw UpdateException('Update URLs must use https.');
     }
     final req = await c.getUrl(uri);
@@ -142,7 +187,7 @@ class Updater {
           .map((a) => (a['name'] as String? ?? '', a['browser_download_url'] as String? ?? ''))
           .toList();
       for (final (name, url) in assets) {
-        final m = _assetName.firstMatch(name);
+        final m = assetPattern(platform).firstMatch(name);
         if (m == null || compareVersions(m.group(1)!, tag) != 0) continue;
         final sig = assets.where((a) => a.$1 == '$name.sig').map((a) => a.$2).firstOrNull;
         if (sig == null) {
@@ -257,10 +302,21 @@ class Updater {
     } catch (_) {}
   }
 
+  /// Options for a silent update with the Inno Setup installer: no wizard,
+  /// no message boxes, close a running RedCourier. The installer starts the
+  /// app again when it is done (see windows/installer/redcourier.iss).
+  static const windowsSetupArgs = ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CLOSEAPPLICATIONS'];
+
+  /// Runs the verified Windows installer and ends this process, so the
+  /// installer can replace the program files.
+  static Future<Never> runWindowsSetup(File setup) async {
+    await Process.start(setup.path, windowsSetupArgs, mode: ProcessStartMode.detached);
+    exit(0);
+  }
+
   /// Starts the updated app and ends this process.
   static Future<Never> restart(String installDir) async {
-    await Process.start(p.join(installDir, 'app', 'AppRun'), const [],
-        mode: ProcessStartMode.detached);
+    await Process.start(p.join(installDir, 'app', 'AppRun'), const [], mode: ProcessStartMode.detached);
     exit(0);
   }
 }

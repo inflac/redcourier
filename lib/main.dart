@@ -32,6 +32,7 @@ void main() async {
   await I18n.load();
   await loadTorSettings();
   await Notifications.init();
+  await initUpdates();
   final themeMode = ValueNotifier(await loadThemeMode());
   final controller = AppController();
   runApp(App(controller: controller, themeMode: themeMode));

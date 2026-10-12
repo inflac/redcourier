@@ -36,6 +36,7 @@ void main() {
         channel: 'http://127.0.0.1:${server.port}/latest',
         clientFactory: () async => HttpClient(),
         publicKeyPem: pubPem,
+        platform: UpdatePlatform.linux,
         requireHttps: false,
       );
 
@@ -96,6 +97,57 @@ void main() {
     expect(await file.readAsString(), 'appimage 1.2.0');
   });
 
+  test('Windows looks for the signed setup file of the release', () async {
+    final setup = utf8.encode('setup 1.2.0');
+    files['/s'] = setup;
+    files['/s.sig'] = utf8.encode(await sig(setup));
+    final base = 'http://127.0.0.1:${server.port}';
+    release['assets'] = [
+      ...(release['assets'] as List),
+      {'name': 'RedCourier-1.2.0-windows-x64-setup.exe', 'browser_download_url': '$base/s'},
+      {'name': 'RedCourier-1.2.0-windows-x64-setup.exe.sig', 'browser_download_url': '$base/s.sig'},
+    ];
+    final u = Updater(
+      currentVersion: '1.0.0',
+      channel: '$base/latest',
+      clientFactory: () async => HttpClient(),
+      publicKeyPem: pubPem,
+      platform: UpdatePlatform.windows,
+      requireHttps: false,
+    );
+    final info = (await u.check())!;
+    expect(info.fileName, 'RedCourier-1.2.0-windows-x64-setup.exe');
+    expect(await (await u.download(info, Directory(p.join(tmp.path, 'w')))).readAsString(), 'setup 1.2.0');
+
+    files['/s'] = utf8.encode('setup 1.2.0 with malware');
+    await expectLater(u.download(info, Directory(p.join(tmp.path, 'w2'))), throwsA(isA<UpdateException>()));
+
+    expect(Updater.windowsSetupArgs, containsAll(['/VERYSILENT', '/CLOSEAPPLICATIONS']));
+  });
+
+  test('Android: APK asset, and self-update only for APKs from GitHub', () {
+    final pattern = Updater.assetPattern(UpdatePlatform.android);
+    expect(pattern.firstMatch('RedCourier-1.2.0.apk')!.group(1), '1.2.0');
+    expect(pattern.hasMatch('RedCourier-1.2.0-x86_64.AppImage'), isFalse);
+
+    const own = 'de.red.redcourier';
+    expect(selfUpdateAllowed(null, own), isTrue, reason: 'adb');
+    expect(selfUpdateAllowed('com.google.android.packageinstaller', own), isTrue, reason: 'downloaded APK');
+    expect(selfUpdateAllowed('com.android.packageinstaller', own), isTrue);
+    expect(selfUpdateAllowed(own, own), isTrue, reason: 'updated by itself before');
+    expect(selfUpdateAllowed('org.fdroid.fdroid', own), isFalse, reason: 'F-Droid updates it');
+    expect(selfUpdateAllowed('com.android.vending', own), isFalse, reason: 'store');
+    expect(selfUpdateAllowed('dev.imranr.obtainium', own), isFalse, reason: 'other updater');
+  });
+
+  test('a Windows installation is recognized by its uninstaller', () {
+    final dir = Directory(p.join(tmp.path, 'RedCourier'))..createSync();
+    final exe = p.join(dir.path, 'redcourier.exe');
+    expect(windowsInstallDir(exe), isNull, reason: 'copied or self-built: no self-update');
+    File(p.join(dir.path, 'unins000.exe')).writeAsStringSync('');
+    expect(windowsInstallDir(exe), dir.path);
+  });
+
   test('no update when current or newer', () async {
     expect(await updater('1.2.0').check(), isNull);
     expect(await updater('2.0.0').check(), isNull);
@@ -136,6 +188,7 @@ void main() {
       channel: 'http://127.0.0.1:${server.port}/latest',
       clientFactory: () async => HttpClient(),
       publicKeyPem: pubPem,
+      platform: UpdatePlatform.linux,
     );
     await expectLater(strict.check(), throwsA(isA<UpdateException>()));
   });

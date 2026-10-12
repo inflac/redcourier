@@ -450,4 +450,8 @@ const germanTexts = <String, String>{
   'The update could not be unpacked.': 'Das Update konnte nicht entpackt werden.',
   'The update could not be installed. The installed version was kept.':
       'Das Update konnte nicht installiert werden. Die installierte Version bleibt erhalten.',
+  'Allow RedCourier to install apps (the settings page just opened), then try again.':
+      'Erlaube RedCourier, Apps zu installieren (die Einstellungsseite wurde gerade geöffnet), und versuche es dann noch einmal.',
+  'Confirm the installation in the Android dialog, then open RedCourier again.':
+      'Bestätige die Installation im Android-Dialog und öffne RedCourier danach wieder.',
 };

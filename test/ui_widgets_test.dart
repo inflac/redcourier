@@ -20,6 +20,21 @@ class RealHttp extends HttpOverrides {}
 
 HttpClient realClient() => HttpOverrides.runWithHttpOverrides(HttpClient.new, RealHttp());
 
+/// Stands in for Android's package installer.
+class FakeInstaller extends AndroidInstaller {
+  bool allowed = true;
+  int settingsOpened = 0;
+  final installed = <String>[];
+  @override
+  Future<String?> installerPackage() async => 'com.google.android.packageinstaller';
+  @override
+  Future<bool> canInstall() async => allowed;
+  @override
+  Future<void> openInstallSettings() async => settingsOpened++;
+  @override
+  Future<void> install(File apk) async => installed.add(apk.readAsStringSync());
+}
+
 Widget host(Widget child) => MaterialApp(
       theme: buildAppTheme(Brightness.light),
       scaffoldMessengerKey: scaffoldMessengerKey,
@@ -118,12 +133,16 @@ void main() {
     late HttpServer server;
     late Map<String, dynamic> release;
     late SimpleKeyPair key;
+    late String apkSig;
+    var platform = UpdatePlatform.linux;
 
     setUp(() async {
       key = await Ed25519().newKeyPair();
       final pub = (await key.extractPublicKey()).bytes;
       const prefix = [0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00];
       final pem = '-----BEGIN PUBLIC KEY-----\n${base64.encode([...prefix, ...pub])}\n-----END PUBLIC KEY-----';
+      apkSig = base64.encode((await Ed25519().sign(utf8.encode('apk 0.0.2'), keyPair: key)).bytes);
+      platform = UpdatePlatform.linux;
       server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((r) async {
         if (r.uri.path == '/latest') {
@@ -132,6 +151,10 @@ void main() {
           r.response.write('appimage');
         } else if (r.uri.path == '/a.sig') {
           r.response.write('not a signature');
+        } else if (r.uri.path == '/apk') {
+          r.response.write('apk 0.0.2');
+        } else if (r.uri.path == '/apk.sig') {
+          r.response.write(apkSig);
         } else {
           r.response.statusCode = 404;
         }
@@ -144,12 +167,14 @@ void main() {
             channel: '$base/latest',
             clientFactory: () async => realClient(),
             publicKeyPem: pem,
+            platform: platform,
             requireHttps: false,
           );
       updateInstallDir = tmp.path;
     });
 
     tearDown(() async {
+      androidInstaller = const AndroidInstaller();
       updateInstallDir = installedDir();
       pendingUpdate.value = null;
       await server.close(force: true);
@@ -162,6 +187,35 @@ void main() {
       await t.tap(find.text('check'));
       await t.pump();
     }
+
+    testWidgets('Android: a verified APK goes to the system installer', (t) async {
+      await prepare(t, tmp);
+      platform = UpdatePlatform.android;
+      final fake = FakeInstaller()..allowed = false;
+      androidInstaller = fake;
+      final base = 'http://127.0.0.1:${server.port}';
+      release = {
+        'tag_name': 'v0.0.2',
+        'assets': [
+          {'name': 'RedCourier-0.0.2.apk', 'browser_download_url': '$base/apk'},
+          {'name': 'RedCourier-0.0.2.apk.sig', 'browser_download_url': '$base/apk.sig'},
+        ],
+      };
+      // Installing apps is not allowed yet: the settings page opens.
+      await open(t);
+      await waitFor(t, find.textContaining('Allow RedCourier to install apps'));
+      expect(fake.settingsOpened, 1);
+      expect(fake.installed, isEmpty);
+      await tapText(t, 'Close');
+      await t.pumpAndSettle();
+
+      fake.allowed = true;
+      await open(t);
+      await waitFor(t, find.textContaining('Confirm the installation'));
+      expect(fake.installed, ['apk 0.0.2']);
+      await tapText(t, 'OK');
+      await t.pumpAndSettle();
+    });
 
     testWidgets('reports "up to date"', (t) async {
       await prepare(t, tmp);

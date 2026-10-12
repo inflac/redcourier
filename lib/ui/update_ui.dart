@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 
@@ -26,9 +27,37 @@ class UpdatePrefs {
   static Future<void> setChannel(String v) => Prefs.set(_channelKey, v.trim().isEmpty ? 'official' : v.trim());
 }
 
-/// Self-update is only possible for installations made by the Tails installer.
+/// Self-update is only possible for versions installed by our installers
+/// (Tails installer, Windows setup) and for APKs from GitHub.
 /// (Not final so tests can point it at a folder.)
 String? updateInstallDir = installedDir();
+
+/// Android's package installer, reached through MainActivity.kt.
+class AndroidInstaller {
+  static const _channel = MethodChannel('redcourier/updates');
+  const AndroidInstaller();
+
+  Future<String?> installerPackage() => _channel.invokeMethod<String>('installerPackage');
+  Future<bool> canInstall() async => await _channel.invokeMethod<bool>('canInstall') ?? false;
+  Future<void> openInstallSettings() => _channel.invokeMethod<void>('openInstallSettings');
+  Future<void> install(File apk) => _channel.invokeMethod<void>('installApk', {'path': apk.path});
+}
+
+/// Replaced in tests.
+AndroidInstaller androidInstaller = const AndroidInstaller();
+
+/// Android: updates are offered only for APKs from GitHub, not for F-Droid
+/// or store installs. Called once before the app starts.
+Future<void> initUpdates() async {
+  if (!Platform.isAndroid) return;
+  try {
+    final installer = await androidInstaller.installerPackage();
+    final info = await PackageInfo.fromPlatform();
+    updateInstallDir = selfUpdateAllowed(installer, info.packageName) ? Directory.systemTemp.path : null;
+  } catch (_) {
+    updateInstallDir = null;
+  }
+}
 bool get updatesAvailable => updateInstallDir != null;
 
 /// An update found in "notify" mode, shown as a banner.
@@ -130,12 +159,33 @@ class _UpdateDialogState extends State<UpdateDialog> {
         _info = info;
       }
       final version = info.version;
+      if (updater.platform == UpdatePlatform.android && !await androidInstaller.canInstall()) {
+        await androidInstaller.openInstallSettings();
+        throw UpdateException('Allow RedCourier to install apps (the settings page just opened), then try again.');
+      }
       work = Directory(p.join(Directory.systemTemp.path, 'redcourier-update-${randomHex(6)}'));
       _set(tr('Downloading update {version}…', {'version': version}), progress: 0);
-      final appImage = await updater.download(info, work,
+      final file = await updater.download(info, work,
           onProgress: (v) => _set(tr('Downloading update {version}…', {'version': version}), progress: v));
       _set(tr('Signature valid. Installing…'));
-      await Updater.install(installDir, appImage);
+      if (updater.platform == UpdatePlatform.android) {
+        // Android asks the user; the app keeps running until then.
+        await androidInstaller.install(file);
+        _set(tr('Confirm the installation in the Android dialog, then open RedCourier again.'));
+        if (mounted) {
+          setState(() {
+            _working = false;
+            _done = true;
+          });
+        }
+        return;
+      }
+      if (updater.platform == UpdatePlatform.windows) {
+        // The installer replaces the program and starts it again.
+        await Future<void>.delayed(const Duration(milliseconds: 800));
+        await Updater.runWindowsSetup(file);
+      }
+      await Updater.install(installDir, file);
       _set(tr('Update installed. Restarting…'));
       await Future<void>.delayed(const Duration(milliseconds: 800));
       await Updater.restart(installDir);
