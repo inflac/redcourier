@@ -35,6 +35,16 @@ abstract class RemoteStore {
   Future<void> putSync(Uint8List bytes, {String? ifMatch, bool createOnly = false});
 }
 
+/// The ETag as the server compares it on If-Match: without the weak marker
+/// and without the suffix web servers add to compressed replies
+/// (`"abc-gzip"`, `"abc-br"`).
+String? normalizeEtag(String? etag) {
+  if (etag == null) return null;
+  var e = etag.trim();
+  if (e.startsWith('W/')) e = e.substring(2);
+  return e.replaceFirst(RegExp(r'-(gzip|br|deflate|zstd)"$'), '"');
+}
+
 class WebDavStore implements RemoteStore {
   static const syncFileName = 'sync.json';
 
@@ -103,6 +113,9 @@ class WebDavStore implements RemoteStore {
         try {
           final req = await _open(c, 'GET', _syncUri);
           req.headers.set(HttpHeaders.cacheControlHeader, 'no-cache');
+          // Apache changes the ETag of compressed replies ("abc-gzip"), which
+          // then never matches on the following If-Match write.
+          req.headers.set(HttpHeaders.acceptEncodingHeader, 'identity');
           final res = await req.close().timeout(_replyTimeout);
           if (res.statusCode == 404) {
             await res.drain<void>();
@@ -116,7 +129,10 @@ class WebDavStore implements RemoteStore {
           await for (final chunk in res) {
             builder.add(chunk);
           }
-          return RemoteFile(builder.takeBytes(), res.headers.value(HttpHeaders.etagHeader));
+          // Nextcloud also sends OC-ETag, which proxies (Cloudflare, Apache)
+          // leave untouched; the normal ETag may have been weakened.
+          final etag = res.headers.value('oc-etag') ?? res.headers.value(HttpHeaders.etagHeader);
+          return RemoteFile(builder.takeBytes(), normalizeEtag(etag));
         } finally {
           c.close(force: true);
         }

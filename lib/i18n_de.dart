@@ -454,4 +454,10 @@ const germanTexts = <String, String>{
       'Erlaube RedCourier, Apps zu installieren (die Einstellungsseite wurde gerade geöffnet), und versuche es dann noch einmal.',
   'Confirm the installation in the Android dialog, then open RedCourier again.':
       'Bestätige die Installation im Android-Dialog und öffne RedCourier danach wieder.',
+  'Connecting through Tor…':
+      'Verbinde über Tor…',
+  'Creating group…':
+      'Gruppe wird erstellt…',
+  'Creating the group on the server through Tor. This can take a minute.':
+      'Die Gruppe wird über Tor auf dem Server angelegt. Das kann eine Minute dauern.',
 };

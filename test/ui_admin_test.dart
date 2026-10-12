@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -5,11 +6,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:redcourier/app_controller.dart';
 import 'package:redcourier/core/identity.dart';
+import 'package:redcourier/core/remote.dart';
 import 'package:redcourier/main.dart';
 import 'package:redcourier/ui/send_screen.dart';
 
 import 'support/fakes.dart';
 import 'support/ui.dart';
+
+/// Holds the first read until [release] completes, like a slow Tor circuit.
+class SlowStore extends MemoryStore {
+  final release = Completer<void>();
+  @override
+  Future<RemoteFile?> getSync() async {
+    await release.future;
+    return super.getSync();
+  }
+}
 
 void main() {
   late Directory tmp;
@@ -20,6 +32,38 @@ void main() {
     dav = MemDav();
   });
   tearDown(() => tmp.delete(recursive: true));
+
+  testWidgets('while the group is created on the server, progress and the input are shown', (t) async {
+    await prepare(t, tmp);
+    final store = SlowStore();
+    final c = AppController(
+      storeFactory: (_) => store,
+      hostingFactory: testController(dav, tmp).hostingFactory,
+      downloadBase: tmp,
+    );
+    await pumpApp(t, c, tmp);
+    await tapText(t, 'Start a new group');
+    await enter(t, 'Group name (only on this device)', 'Work');
+    await enter(t, 'Identifier (name or handle)', 'alice');
+    await enter(t, 'Password for this group', 'correct horse');
+    await enter(t, 'Repeat password', 'correct horse');
+    await enter(t, 'WebDAV folder URL', 'https://cloud.example/dav/work/');
+    await enter(t, 'WebDAV username', 'alice');
+    await enter(t, 'WebDAV app password', 'secret');
+    await tapText(t, 'Create group');
+
+    // The local group exists, the server is still busy: the setup screen
+    // shows progress and the entered data instead of empty fields.
+    await waitFor(t, find.text('Creating group…'));
+    expect(find.textContaining('This can take a minute'), findsOneWidget);
+    expect(find.text('https://cloud.example/dav/work/'), findsOneWidget);
+    final create = find.ancestor(of: find.text('Creating group…'), matching: find.byType(ElevatedButton));
+    expect(t.widget<ElevatedButton>(create).onPressed, isNull);
+
+    store.release.complete();
+    await waitFor(t, find.text('Inbox'));
+    await unmount(t);
+  }, variant: desktop);
 
   testWidgets('an admin creates a group, manages members and sends a file', (t) async {
     await prepare(t, tmp);

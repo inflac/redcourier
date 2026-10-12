@@ -12,6 +12,13 @@ class FakeDav {
   Uint8List? file;
   int rev = 0;
   int? forceStatus;
+
+  /// Like Apache with mod_deflate: compressed replies get "-gzip" in the ETag.
+  bool apacheGzip = false;
+  bool alwaysSuffix = false;
+
+  /// Like Nextcloud behind Cloudflare: a weak ETag plus the real OC-ETag.
+  bool cloudflare = false;
   final auth = <String?>[];
   FakeDav(this.server) {
     server.listen(_handle);
@@ -31,7 +38,13 @@ class FakeDav {
       if (file == null) {
         res.statusCode = 404;
       } else {
-        res.headers.set(HttpHeaders.etagHeader, etag);
+        final gz = (r.headers.value(HttpHeaders.acceptEncodingHeader) ?? '').contains('gzip');
+        res.headers.set(HttpHeaders.etagHeader,
+            (apacheGzip && gz) || alwaysSuffix ? 'W/${etag.replaceFirst(RegExp(r'"$'), '-gzip"')}' : etag);
+        if (cloudflare) {
+          res.headers.set(HttpHeaders.etagHeader, 'W/"cf-$rev"');
+          res.headers.set('oc-etag', etag);
+        }
         res.add(file!);
       }
     } else if (r.method == 'PUT') {
@@ -74,6 +87,34 @@ void main() {
     await expectLater(store.putSync(Uint8List.fromList([1]), ifMatch: f.etag), throwsA(isA<ConflictException>()));
     expect(utf8.decode((await store.getSync())!.bytes), 'v2');
     expect(dav.auth.last, 'Basic ${base64.encode(utf8.encode('user:pw'))}');
+  });
+
+  test('ETags changed by compression (Apache) still allow conditional writes', () async {
+    dav.apacheGzip = true;
+    await store.putSync(Uint8List.fromList([1]), createOnly: true);
+    for (var i = 2; i < 5; i++) {
+      final f = (await store.getSync())!;
+      await store.putSync(Uint8List.fromList([i]), ifMatch: f.etag);
+    }
+    // Even if the server adds the suffix to every reply.
+    dav.alwaysSuffix = true;
+    final f = (await store.getSync())!;
+    expect(f.etag, '"4"');
+    await store.putSync(Uint8List.fromList([9]), ifMatch: f.etag);
+    expect((await store.getSync())!.bytes, [9]);
+
+    // Nextcloud behind Cloudflare: the OC-ETag is used.
+    dav.alwaysSuffix = false;
+    dav.cloudflare = true;
+    final g = (await store.getSync())!;
+    expect(g.etag, '"5"');
+    await store.putSync(Uint8List.fromList([10]), ifMatch: g.etag);
+    expect((await store.getSync())!.bytes, [10]);
+
+    expect(normalizeEtag('W/"abc-gzip"'), '"abc"');
+    expect(normalizeEtag('"abc-br"'), '"abc"');
+    expect(normalizeEtag('"a-gzip-b"'), '"a-gzip-b"');
+    expect(normalizeEtag(null), isNull);
   });
 
   test('updated credentials apply to the next request', () async {

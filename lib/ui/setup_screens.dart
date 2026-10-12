@@ -375,19 +375,36 @@ class _GroupSetupScreenState extends State<GroupSetupScreen> {
 
   Identity get _me => widget.app.identity!;
 
+  /// Creating may have been started on the welcome screen and still run.
+  bool get _creating => widget.app.creatingGroup;
+
   @override
   void initState() {
     super.initState();
+    _showAttempt();
+    // The welcome screen starts creating right after this screen appears.
+    widget.app.addListener(_showAttempt);
     // After a failed attempt (for example a timeout) keep what was entered.
-    final last = widget.app.lastCreateAttempt;
     final failure = widget.app.lastCreateFailure;
-    if (last != null && failure != null) {
-      _url.text = last.url;
-      _user.text = last.username;
-      _pass.text = last.password;
+    if (widget.app.lastCreateAttempt != null && failure != null) {
       _createError = '${errorMessage(failure)}\n${tr('You can simply try again. If the group was already '
           'stored on the server, this device recognizes it as its own and takes it over.')}';
     }
+  }
+
+  @override
+  void dispose() {
+    widget.app.removeListener(_showAttempt);
+    super.dispose();
+  }
+
+  /// Shows the WebDAV data of the running or last attempt.
+  void _showAttempt() {
+    final last = widget.app.lastCreateAttempt;
+    if (last == null || _url.text.isNotEmpty) return;
+    _url.text = last.url;
+    _user.text = last.username;
+    _pass.text = last.password;
   }
 
   Future<void> _join() async {
@@ -510,9 +527,9 @@ class _GroupSetupScreenState extends State<GroupSetupScreen> {
           _ErrorText(_joinError),
           const SizedBox(height: 12),
           ElevatedButton.icon(
-            onPressed: _busy ? null : _join,
-            icon: const Icon(Icons.login),
-            label: Text(tr('Join group')),
+            onPressed: _busy || _creating ? null : _join,
+            icon: _busyIcon(_busy && !_creating, Icons.login),
+            label: Text(_busy && !_creating ? tr('Connecting through Tor…') : tr('Join group')),
           ),
         ]),
         const SizedBox(height: 16),
@@ -528,18 +545,21 @@ class _GroupSetupScreenState extends State<GroupSetupScreen> {
           SecureTextField(controller: _user, label: tr('WebDAV username')),
           const SizedBox(height: 12),
           SecureTextField(controller: _pass, label: tr('WebDAV app password'), obscure: true),
-          _ErrorText(_createError),
+          if (!_creating) _ErrorText(_createError),
           const SizedBox(height: 12),
+          if (_creating) ...[
+            Text(tr('Creating the group on the server through Tor. This can take a minute.'),
+                style: TextStyle(color: palette.fgDim)),
+            const SizedBox(height: 8),
+            const LinearProgressIndicator(),
+            const SizedBox(height: 12),
+          ],
           ElevatedButton.icon(
-            onPressed: _busy ? null : _create,
-            icon: const Icon(Icons.cloud_upload_outlined),
-            label: Text(tr('Create group')),
+            onPressed: _busy || _creating ? null : _create,
+            icon: _busyIcon(_creating, Icons.cloud_upload_outlined),
+            label: Text(_creating ? tr('Creating group…') : tr('Create group')),
           ),
         ]),
-        if (_busy) ...[
-          const SizedBox(height: 16),
-          const LinearProgressIndicator(),
-        ],
       ],
     );
   }

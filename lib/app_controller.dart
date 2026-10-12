@@ -53,6 +53,10 @@ class AppController extends ChangeNotifier {
   WebDavConfig? lastCreateAttempt;
   Object? lastCreateFailure;
 
+  /// True while the group's sync.json is being created on the server (this
+  /// can take a while through Tor). The setup screen shows progress.
+  bool creatingGroup = false;
+
   Vault? _vault;
   VaultData? _data;
   GroupSession? session;
@@ -153,6 +157,7 @@ class AppController extends ChangeNotifier {
     session = null;
     lastCreateAttempt = null;
     lastCreateFailure = null;
+    creatingGroup = false;
   }
 
   /// File hosts for deliveries, reached through Tor on circuits separate
@@ -261,9 +266,11 @@ class AppController extends ChangeNotifier {
   /// Create the group's sync.json in an empty WebDAV folder (as admin).
   Future<void> createGroup(WebDavConfig cfg) async {
     lastCreateAttempt = cfg;
-    await _checkFolderUnused(cfg);
+    creatingGroup = true;
+    notifyListeners();
     final data = _data!;
     try {
+      await _checkFolderUnused(cfg);
       session = await GroupSession.create(
         identity: identity!,
         webdav: cfg,
@@ -280,10 +287,12 @@ class AppController extends ChangeNotifier {
       );
     } catch (e) {
       // The setup screen is rebuilt with the entered data and the error.
+      creatingGroup = false;
       lastCreateFailure = e;
       notifyListeners();
       rethrow;
     }
+    creatingGroup = false;
     data.pendingAdminKeys.clear();
     lastCreateAttempt = null;
     lastCreateFailure = null;
