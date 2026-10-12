@@ -32,7 +32,6 @@ const _ctxFilesSignKey = 'files-sign-key';
 const _ctxAdminSignKey = 'admin-sign-key';
 String _ctxEntryKey(String id) => 'entry-key/$id';
 const _aadUserDetails = 'rc/user-details';
-const _aadSyncConfig = 'rc/sync-config';
 String _aadEntry(String id) => 'rc/entry/$id';
 
 const _domainUsers = 'redcourier/users/v1';
@@ -162,8 +161,7 @@ class Entry {
 class SyncResult {
   final int newEntries;
   final int rejectedEntries;
-  final bool credentialsUpdated;
-  SyncResult(this.newEntries, this.rejectedEntries, this.credentialsUpdated);
+  SyncResult(this.newEntries, this.rejectedEntries);
 }
 
 // ── Verification of a downloaded sync.json ───────────────────────────────────
@@ -305,18 +303,6 @@ class _Draft {
   Future<void> writeNames(Map<String, String> names) async {
     users['user_details'] =
         await symEncrypt(groupKey, utf8.encode(canonicalJson(names)), _aadUserDetails);
-  }
-
-  Future<Map<String, dynamic>?> readSyncConfig() async {
-    if (users['sync_config'] == null) return null;
-    final raw = await symDecrypt(groupKey, users['sync_config'], _aadSyncConfig);
-    return jsonDecode(utf8.decode(raw)) as Map<String, dynamic>;
-  }
-
-  Future<void> writeSyncConfig(Map<String, dynamic>? cfg) async {
-    users['sync_config'] = cfg == null
-        ? null
-        : await symEncrypt(groupKey, utf8.encode(canonicalJson(cfg)), _aadSyncConfig);
   }
 
   /// Hand the group's shared keys to an active member according to its role.
@@ -464,13 +450,11 @@ class GroupSession {
           },
         },
         'user_details': null,
-        'sync_config': null,
       },
       'files': {'version': 1, 'entries': <String, dynamic>{}},
     };
     final draft = _Draft(doc, groupKey, filesSeed, adminSeed);
     await draft.writeNames({identity.userId: identity.identifier});
-    await draft.writeSyncConfig(webdav.toJson());
     await draft.resealAll();
     final out = draft.doc;
     out['users_sig'] = await sign(adminSeed, _usersMessage(out));
@@ -563,13 +547,13 @@ class GroupSession {
         final v = await _verify(file.bytes);
         _checkTrust(v, confirmedFingerprint);
         _checkRollback(v);
-        final credsUpdated = await _load(v);
+        await _load(v);
         await persist();
         await _cleanupPartials();
         final fresh = _entries
             .where((e) => e.forMe && !e.sentByMe && !e.isExpired && !before.contains(e.id))
             .length;
-        return SyncResult(hadState ? fresh : inbox.where(isNew).length, v.rejected, credsUpdated);
+        return SyncResult(hadState ? fresh : inbox.where(isNew).length, v.rejected);
       });
 
   void _checkTrust(_Verified v, String? confirmedFingerprint) {
@@ -589,9 +573,8 @@ class GroupSession {
     }
   }
 
-  /// Decrypt everything this user may read. Returns true if the WebDAV
-  /// credentials were updated by an admin.
-  Future<bool> _load(_Verified v) async {
+  /// Decrypt everything this user may read.
+  Future<void> _load(_Verified v) async {
     final me = v.members[myId];
     if (me == null || me['role'] == roleRemoved) throw NotMemberException();
     final groupKey = await _sealKey.open(me['group_key'], _ctxGroupKey);
@@ -608,18 +591,6 @@ class GroupSession {
     }
     final draft = _Draft(v.doc, groupKey, filesSeed, adminSeed);
     final names = await draft.readNames();
-
-    var credsUpdated = false;
-    final cfg = await draft.readSyncConfig();
-    if (cfg != null) {
-      // Only credentials may change remotely; the folder URL stays what the
-      // user configured, so nobody can redirect clients to another server.
-      final remote = WebDavConfig.fromJson(cfg);
-      if (remote.username != local.webdav.username || remote.password != local.webdav.password) {
-        local.webdav = WebDavConfig(local.webdav.url, remote.username, remote.password);
-        credsUpdated = true;
-      }
-    }
 
     final entries = <Entry>[];
     for (final e in v.entries.entries) {
@@ -639,7 +610,6 @@ class GroupSession {
     local.filesVersion = v.filesVersion;
     local.hidden.retainAll(v.entries.keys);
     local.seen.retainAll(v.entries.keys);
-    return credsUpdated;
   }
 
   Future<Entry?> _openEntry(String id, Map<String, dynamic> raw, Map<String, String> names) async {
@@ -720,6 +690,9 @@ class GroupSession {
           final out = draft.doc;
           if (draft.usersChanged) {
             if (draft.adminSeed == null) throw SyncException('Only admins can change members.');
+            // Earlier versions stored the WebDAV credentials here; they are
+            // entered on each device now and removed from the shared file.
+            draft.users.remove('sync_config');
             draft.users['version'] = v.usersVersion + 1;
             out['users_sig'] = await sign(draft.adminSeed!, _usersMessage(out));
           }
@@ -1145,10 +1118,8 @@ class GroupSession {
         };
 
         final names = await d.readNames();
-        final cfg = await d.readSyncConfig();
         d.groupKey = randomBytes(32);
         await d.writeNames(names);
-        await d.writeSyncConfig(cfg);
 
         d.filesSeed = randomBytes(32);
         d.signKeys['files'] = b64e(await ed25519PublicKey(d.filesSeed));
@@ -1180,16 +1151,33 @@ class GroupSession {
         d.usersChanged = true;
       });
 
-  /// Publish new WebDAV credentials to all members (for example after
-  /// removing someone). Members pick them up on their next sync, so change
-  /// the password on the server only after everyone has synced.
-  Future<void> updateCredentials(String username, String password) async {
-    await _mutate((d) async {
-      _requireAdmin(d);
-      await d.writeSyncConfig(WebDavConfig(local.webdav.url, username, password).toJson());
-      d.usersChanged = true;
-    });
-  }
+  // ── WebDAV access ──
+
+  /// Uses new WebDAV access data (URL, user, app password) on this device,
+  /// for example after the admin changed the app password. [candidate]
+  /// reaches the new folder. Nothing is saved unless it holds this very
+  /// group: signatures valid and the admin key this device trusts (or, after
+  /// an admin change, the [confirmedFingerprint] from an admin).
+  Future<void> changeWebDav(WebDavConfig cfg, RemoteStore candidate, {String? confirmedFingerprint}) =>
+      _serial(() async {
+        final file = await candidate.getSync();
+        if (file == null) {
+          throw SyncException('No RedCourier group was found in this folder. Check the folder URL.');
+        }
+        final v = await _verify(file.bytes);
+        if (v.adminPub != local.trustedAdminKey) {
+          final fp = adminKeyFingerprint(v.adminPub);
+          if (confirmedFingerprint == null || normalizeFingerprint(confirmedFingerprint) != fp) {
+            throw TrustException(fp);
+          }
+          local.trustedAdminKey = v.adminPub;
+        }
+        final me = v.members[myId];
+        if (me == null || me['role'] == roleRemoved) throw NotMemberException();
+        local.webdav = cfg;
+        await _load(v);
+        await persist();
+      });
 }
 
 /// File hosts plus the HTTP client used to reach them.

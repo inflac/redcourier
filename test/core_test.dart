@@ -476,13 +476,66 @@ void main() {
     expect(await b.cleanupExpired(), 1);
     await a.sync();
     expect(await a.cleanupExpired(), 0);
+  });
 
-    await a.updateCredentials('newuser', 'newpw');
-    final r = await b.sync();
-    expect(r.credentialsUpdated, isTrue);
-    expect(b.local.webdav.username, 'newuser');
-    expect(b.local.webdav.password, 'newpw');
+  test('WebDAV access is local and only saved after checking the folder', () async {
+    final store = MemoryStore();
+    final alice = await Identity.generate('alice');
+    final bob = await Identity.generate('bob');
+    final a = await createGroup(alice, store);
+    await a.addMember(bob.joinRequest);
+    final b = await joinGroup(bob, store, a.fingerprint);
+
+    // The shared file holds no WebDAV credentials.
+    final doc = jsonDecode(utf8.decode(store.sync!)) as Map<String, dynamic>;
+    expect((doc['users'] as Map).containsKey('sync_config'), isFalse);
+    expect(utf8.decode(store.sync!), isNot(contains('"password"')));
+
+    final moved = WebDavConfig('https://new.example/dav/rc/', 'bob', 'new-pw');
+    // An empty folder or another group is refused; nothing changes.
+    await expectLater(b.changeWebDav(moved, MemoryStore()), throwsA(isA<SyncException>()));
+    final other = MemoryStore();
+    await createGroup(await Identity.generate('mallory'), other);
+    await expectLater(b.changeWebDav(moved, other), throwsA(isA<TrustException>()));
     expect(b.local.webdav.url, webdav.url);
+
+    // The same group (for example after a new app password) is accepted.
+    await b.changeWebDav(moved, store);
+    expect(b.local.webdav.url, moved.url);
+    expect(b.local.webdav.password, 'new-pw');
+
+    // After an admin change, the new fingerprint from an admin is needed.
+    final carol = await Identity.generate('carol');
+    await a.addMember(carol.joinRequest, admin: true);
+    await a.setAdmin(carol.userId, false);
+    await expectLater(b.changeWebDav(webdav, store), throwsA(isA<TrustException>()));
+    await b.changeWebDav(webdav, store, confirmedFingerprint: a.fingerprint);
+    expect(b.local.webdav.url, webdav.url);
+
+    // A removed member cannot get in by changing the access data.
+    await a.removeMember(bob.userId);
+    await expectLater(b.changeWebDav(webdav, store), throwsA(isA<NotMemberException>()));
+  });
+
+  test('credentials stored by earlier versions are removed on the next change', () async {
+    final store = MemoryStore();
+    final alice = await Identity.generate('alice');
+    final a = await createGroup(alice, store);
+    final doc = jsonDecode(utf8.decode(store.sync!)) as Map<String, dynamic>;
+    (doc['users'] as Map)['sync_config'] = 'old encrypted credentials';
+    // Re-sign as the admin would have (old versions signed this field).
+    final seed = await (await alice.sealKeyPair())
+        .open((doc['users']['members'] as Map)[alice.userId]['admin_sign_key'], 'admin-sign-key');
+    doc['users_sig'] = await sign(seed, canonicalBytes('redcourier/users/v1', {
+      'format': doc['format'],
+      'format_version': doc['format_version'],
+      'users': doc['users'],
+    }));
+    await store.putSync(Uint8List.fromList(utf8.encode(jsonEncode(doc))));
+    await a.sync();
+    await a.addMember((await Identity.generate('bob')).joinRequest);
+    final after = jsonDecode(utf8.decode(store.sync!)) as Map<String, dynamic>;
+    expect((after['users'] as Map).containsKey('sync_config'), isFalse);
   });
 
   test('vault round trip and wrong password', () async {

@@ -9,6 +9,7 @@ import '../notifications.dart';
 import '../prefs.dart';
 import '../theme.dart';
 import 'update_ui.dart';
+import 'webdav_dialog.dart';
 import 'widgets.dart';
 
 const themePrefKey = 'theme_mode';
@@ -90,47 +91,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _updateCredentials() async {
-    final s = widget.app.session!;
-    final user = TextEditingController(text: s.local.webdav.username);
-    final pass = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(tr('Publish new WebDAV credentials')),
-        content: SizedBox(
-          width: 420,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text(
-              tr('1. Create a new app password on the server, keep the old one active.\n'
-                  '2. Publish it here. It is stored encrypted in sync.json.\n'
-                  '3. Wait until all members have synced.\n'
-                  '4. Revoke the old password on the server.'),
-              style: TextStyle(color: AppPalette.of(ctx).fgDim),
-            ),
-            const SizedBox(height: 12),
-            SecureTextField(controller: user, label: tr('Username')),
-            const SizedBox(height: 12),
-            SecureTextField(controller: pass, label: tr('New app password'), obscure: true),
-          ]),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Cancel'))),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('Publish'))),
-        ],
-      ),
-    );
-    if (ok != true || !mounted) return;
-    if (user.text.trim().isEmpty || pass.text.isEmpty) {
-      AppNotifier.showError(tr('Username and password are required.'));
-      return;
-    }
-    try {
-      await withProgress(context, tr('Publishing…'),
-          () => widget.app.run((s) => s.updateCredentials(user.text.trim(), pass.text)));
-      AppNotifier.showSuccess(tr('Published. Members receive the new credentials on their next sync.'));
-    } catch (e) {
-      AppNotifier.showError(errorMessage(e));
+  Future<void> _changeWebDav() async {
+    if (await showWebDavAccessDialog(context, widget.app)) {
+      AppNotifier.showSuccess(tr('WebDAV access checked and saved.'));
+      if (mounted) setState(() {});
     }
   }
 
@@ -310,14 +274,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Text(tr('Username: {name}', {'name': s.local.webdav.username}),
                         style: TextStyle(color: palette.fgDim)),
                     const SizedBox(height: 12),
-                    if (s.isAdmin) ...[
-                      OutlinedButton.icon(
-                        onPressed: _updateCredentials,
-                        icon: const Icon(Icons.key),
-                        label: Text(tr('Publish new WebDAV credentials')),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
+                    OutlinedButton.icon(
+                      onPressed: _changeWebDav,
+                      icon: const Icon(Icons.key),
+                      label: Text(tr('Change WebDAV access')),
+                    ),
+                    const SizedBox(height: 8),
                   ],
                   OutlinedButton.icon(
                     onPressed: _clearDownloads,

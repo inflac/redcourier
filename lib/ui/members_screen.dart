@@ -81,8 +81,8 @@ class _MembersScreenState extends State<MembersScreen> {
         if (m.isAdmin)
           tr('Because {name} is an admin, the group fingerprint changes and every member has to '
               'confirm the new one.', {'name': m.identifier}),
-        tr('Afterwards, change the WebDAV password: publish new credentials in Settings, wait '
-            'until everyone has synced, then change the password on the server.'),
+        tr('Afterwards, create a new app password on the server and revoke the old one. Send the new '
+            'password to the remaining members; they enter it under Settings → Change WebDAV access.'),
       ].join('\n\n'),
       action: tr('Remove'),
       danger: true,

@@ -66,7 +66,7 @@ have already verified. ML-DSA can be added the same way when needed.
 | --- | ------- | ------- |
 | User encryption keys (X25519 + ML-KEM-768) | each user | receive group keys and entry keys |
 | User signing key (Ed25519) | each user | sign own entries |
-| `group_key` (AES-256) | all members | encrypt member names and WebDAV credentials |
+| `group_key` (AES-256) | all members | encrypt member names |
 | `files_sign_key` (Ed25519) | all members | sign the file list |
 | `admin_sign_key` (Ed25519) | admins | sign the user list |
 | entry key (AES-256) | sender + recipients | encrypt one entry |
@@ -93,7 +93,6 @@ from random public keys, not from the identifier.
       }
     },
     user_details: enc[group_key]({ <user_id>: identifier }),
-    sync_config:  enc[group_key]({ url, username, password })
   },
   users_sig: sig[admin_sign_key](format, format_version, users),
 
@@ -306,19 +305,28 @@ ordinary member needs no re-confirmation.
 | delete own deliveries | ✓ | ✓ |
 | delete any delivery | | ✓ |
 | add, remove, promote, demote members | | ✓ |
-| publish new WebDAV credentials | | ✓ |
 
-## Removing a member and changing credentials
+## Removing a member and WebDAV access
 
 Removing a member keeps its public keys with role `removed`, so entries it sent
 earlier stay verifiable. All shared keys it knew are replaced and sealed again to
 the remaining members. Entries already addressed to the removed user stay
 readable for them; new entries are not.
 
-The removed user still knows the WebDAV password. The admin therefore publishes
-new credentials (stored encrypted in `sync.json`), waits until everyone has
-synced, and then revokes the old password on the server. Clients only accept new
-credentials from `sync.json`, never a different folder URL.
+The removed user still knows the WebDAV password. The admin therefore creates
+a new app password on the server, revokes the old one and sends the new one to
+the remaining members, for example with a new invite.
+
+WebDAV access data (URL, user, app password) is never stored in `sync.json`;
+each device keeps its own in its encrypted vault. A member enters new data under
+*Settings → Change WebDAV access* (or pastes a new invite); the sync error banner
+offers the same when the login fails. New data is saved only after the app
+reached the folder through Tor and found this very group there: valid
+signatures, the admin key this device trusts (after an admin change, the new
+fingerprint from an admin), and the user still a member. A typo or a foreign
+folder therefore cannot lock a device out. Files written by earlier versions,
+which kept the credentials encrypted in `sync.json`, lose them with the next
+change of the member list.
 
 ## Local storage
 

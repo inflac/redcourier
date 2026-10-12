@@ -1,14 +1,42 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:redcourier/app_controller.dart';
 import 'package:redcourier/core/identity.dart';
+import 'package:redcourier/core/remote.dart';
 import 'package:redcourier/core/tor.dart';
 import 'package:redcourier/i18n.dart';
 import 'package:redcourier/notifications.dart';
 
 import 'support/fakes.dart';
 import 'support/ui.dart';
+
+/// A WebDAV folder that only accepts the current app password.
+class PasswordStore implements RemoteStore {
+  final WebDavConfig Function() config;
+  final MemoryStore backing;
+  final String Function() password;
+  PasswordStore(this.config, this.backing, this.password);
+
+  void _login() {
+    if (config().password != password()) {
+      throw RemoteException('WebDAV login failed (401). Check username and password.');
+    }
+  }
+
+  @override
+  Future<RemoteFile?> getSync() async {
+    _login();
+    return backing.getSync();
+  }
+
+  @override
+  Future<void> putSync(Uint8List bytes, {String? ifMatch, bool createOnly = false}) async {
+    _login();
+    return backing.putSync(bytes, ifMatch: ifMatch, createOnly: createOnly);
+  }
+}
 
 void main() {
   late Directory tmp;
@@ -22,6 +50,42 @@ void main() {
     TorNetwork.configuredPort = null;
     await tmp.delete(recursive: true);
   });
+
+  testWidgets('after a new app password, the sync banner leads to a checked access change', (t) async {
+    await prepare(t, tmp);
+    final backing = MemoryStore();
+    var serverPassword = 'old';
+    final c = AppController(
+      storeFactory: (config) => PasswordStore(config, backing, () => serverPassword),
+      hostingFactory: testController(dav, tmp).hostingFactory,
+      downloadBase: tmp,
+    );
+    await t.runAsync(() async {
+      await c.init(tmp);
+      await c.addGroup('Work', 'alice', 'correct horse');
+      await c.createGroup(WebDavConfig('https://cloud.example/dav/work/', 'alice', 'old'));
+    });
+    await pumpApp(t, c, tmp, init: false);
+    await waitFor(t, find.text('Inbox'));
+
+    // The admin changed the app password on the server.
+    serverPassword = 'new';
+    await syncNow(t);
+    await waitFor(t, find.textContaining('login failed'));
+    await tapText(t, 'Change WebDAV access');
+    await t.pumpAndSettle();
+    await enter(t, 'WebDAV app password', 'typo');
+    await tapText(t, 'Check and save');
+    await waitFor(t, find.textContaining('login failed (401)').last);
+    expect(c.session!.local.webdav.password, 'old', reason: 'nothing is saved before the check passed');
+
+    await enter(t, 'WebDAV app password', 'new');
+    await tapText(t, 'Check and save');
+    await waitFor(t, find.text('Up to date'));
+    expect(c.session!.local.webdav.password, 'new');
+    expect(find.text('Change WebDAV access'), findsNothing, reason: 'the banner is gone');
+    await unmount(t);
+  }, variant: desktop);
 
   testWidgets('unlocking, switching groups, settings and deleting a group', (t) async {
     await prepare(t, tmp);
@@ -99,16 +163,17 @@ void main() {
     await idle(t);
     expect(TorNetwork.configuredPort, isNull);
 
-    // Admin: publish new WebDAV credentials.
-    await tapText(t, 'Publish new WebDAV credentials');
+    // WebDAV access: a folder without this group is refused, the same folder
+    // with a new app password is saved.
+    await tapText(t, 'Change WebDAV access');
     await t.pumpAndSettle();
-    await tapText(t, 'Publish');
-    await waitFor(t, find.text('Username and password are required.'));
-    await tapText(t, 'Publish new WebDAV credentials');
-    await t.pumpAndSettle();
-    await enter(t, 'New app password', 'new-secret');
-    await tapText(t, 'Publish');
-    await waitFor(t, find.textContaining('Members receive the new credentials'));
+    await enter(t, 'WebDAV folder URL', 'https://cloud.example/dav/empty/');
+    await tapText(t, 'Check and save');
+    await waitFor(t, find.textContaining('No RedCourier group was found'));
+    await enter(t, 'WebDAV folder URL', 'https://cloud.example/dav/family/');
+    await enter(t, 'WebDAV app password', 'new-secret');
+    await tapText(t, 'Check and save');
+    await waitFor(t, find.text('WebDAV access checked and saved.'));
     expect(c.session!.local.webdav.password, 'new-secret');
 
     // Downloads, locking, switching.

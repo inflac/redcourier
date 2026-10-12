@@ -6,6 +6,8 @@ import '../app_controller.dart';
 import '../app_notifier.dart';
 import '../core/crypto_util.dart';
 import '../core/group.dart';
+import '../core/remote.dart';
+import '../core/tor.dart';
 import '../core/messages.dart';
 import '../i18n.dart';
 import '../notifications.dart';
@@ -15,6 +17,7 @@ import 'qr_scan.dart';
 import 'send_screen.dart';
 import 'settings_screen.dart';
 import 'update_ui.dart';
+import 'webdav_dialog.dart';
 import 'widgets.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -30,6 +33,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _syncing = false;
   String? _problem;
   bool _notMember = false;
+
+  /// The WebDAV folder could not be used (login, address): offer to change
+  /// the access data on this device.
+  bool _accessProblem = false;
 
   /// Running downloads: entry id -> (status, progress).
   final Map<String, (String, double?)> _downloads = {};
@@ -76,6 +83,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       setState(() {
         _problem = null;
         _notMember = false;
+        _accessProblem = false;
       });
       if (r.newEntries > 0 && !_inForeground) {
         await Notifications.newDeliveries(r.newEntries);
@@ -85,7 +93,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       } else if (!quiet) {
         AppNotifier.showInfo(tr('Up to date'));
       }
-      if (r.credentialsUpdated) AppNotifier.showInfo(tr('The admin updated the WebDAV credentials.'));
       unawaited(_s.cleanupExpired().catchError((_) => 0));
     } on TrustException catch (e) {
       if (!mounted) return;
@@ -99,7 +106,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _problem = tr('Sync failed: {reason}', {'reason': errorMessage(e)}));
+      if (mounted) {
+        setState(() {
+          _problem = tr('Sync failed: {reason}', {'reason': errorMessage(e)});
+          _accessProblem = e is RemoteException && e is! TorException;
+        });
+      }
     } finally {
       if (mounted) setState(() => _syncing = false);
     }
@@ -287,6 +299,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       if (ok) await widget.app.deleteGroup();
                     },
                     child: Text(tr('Delete from this device')),
+                  ),
+                if (_accessProblem)
+                  TextButton(
+                    onPressed: () async {
+                      if (await showWebDavAccessDialog(context, widget.app)) await _sync();
+                    },
+                    child: Text(tr('Change WebDAV access')),
                   ),
                 TextButton(onPressed: () => _sync(), child: Text(tr('Retry'))),
               ],

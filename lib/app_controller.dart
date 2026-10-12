@@ -302,6 +302,20 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Uses new WebDAV access data for the unlocked group on this device. It
+  /// is saved only if the folder holds this group (GroupSession.changeWebDav).
+  Future<void> updateWebDav(WebDavConfig cfg, {String? confirmedFingerprint}) async {
+    try {
+      await _checkFolderUnused(cfg);
+      final candidate =
+          storeFactory?.call(() => cfg) ?? WebDavStore(() => cfg, clientFactory: TorNetwork.createHttpClient);
+      await session!.changeWebDav(cfg, candidate, confirmedFingerprint: confirmedFingerprint);
+      await _rememberFolder(cfg);
+    } finally {
+      notifyListeners();
+    }
+  }
+
   /// Join an existing group with an invite from its admin.
   Future<void> joinGroup(Invite invite, String fingerprint) async {
     await _checkFolderUnused(invite.webdav);

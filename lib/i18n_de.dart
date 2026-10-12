@@ -17,7 +17,6 @@ const germanTexts = <String, String>{
   'Download': 'Herunterladen',
   'Loading…': 'Wird geladen…',
   'Lock': 'Sperren',
-  'Publish': 'Veröffentlichen',
   'Publishing…': 'Wird veröffentlicht…',
   'Remove': 'Entfernen',
   'Retry': 'Erneut versuchen',
@@ -98,7 +97,6 @@ const germanTexts = <String, String>{
   '1 new delivery': '1 neue Lieferung',
   '{n} new deliveries': '{n} neue Lieferungen',
   'Up to date': 'Alles aktuell',
-  'The admin updated the WebDAV credentials.': 'Der Admin hat die WebDAV-Zugangsdaten aktualisiert.',
   'Sync failed: {reason}': 'Synchronisieren fehlgeschlagen: {reason}',
   'Group key changed': 'Gruppenschlüssel geändert',
   'Fingerprint from your admin': 'Fingerprint von deinem Admin',
@@ -163,8 +161,6 @@ const germanTexts = <String, String>{
       'Alle gemeinsamen Gruppenschlüssel werden ersetzt. Danach kann {name} die Mitgliederliste nicht mehr lesen und keine Änderungen mehr signieren. Dateien, die bereits an {name} gesendet wurden, bleiben für {name} lesbar.',
   'Because {name} is an admin, the group fingerprint changes and every member has to confirm the new one.':
       'Weil {name} Admin ist, ändert sich der Gruppen-Fingerprint, und alle Mitglieder müssen den neuen bestätigen.',
-  'Afterwards, change the WebDAV password: publish new credentials in Settings, wait until everyone has synced, then change the password on the server.':
-      'Ändere danach das WebDAV-Passwort: Veröffentliche neue Zugangsdaten in den Einstellungen, warte, bis alle synchronisiert haben, und ändere dann das Passwort auf dem Server.',
   'Removing member and rotating keys…': 'Mitglied wird entfernt, Schlüssel werden ersetzt…',
   '{name} was removed': '{name} wurde entfernt',
   'The admin key is replaced. The group fingerprint changes and every member has to confirm the new one.':
@@ -188,14 +184,6 @@ const germanTexts = <String, String>{
   'Group': 'Gruppe',
   'WebDAV folder': 'WebDAV-Ordner',
   'Username: {name}': 'Benutzername: {name}',
-  'Publish new WebDAV credentials': 'Neue WebDAV-Zugangsdaten veröffentlichen',
-  '1. Create a new app password on the server, keep the old one active.\n2. Publish it here. It is stored encrypted in sync.json.\n3. Wait until all members have synced.\n4. Revoke the old password on the server.':
-      '1. Erstelle auf dem Server ein neues App-Passwort und lass das alte aktiv.\n2. Veröffentliche es hier. Es wird verschlüsselt in sync.json gespeichert.\n3. Warte, bis alle Mitglieder synchronisiert haben.\n4. Widerrufe das alte Passwort auf dem Server.',
-  'Username': 'Benutzername',
-  'New app password': 'Neues App-Passwort',
-  'Username and password are required.': 'Benutzername und Passwort sind erforderlich.',
-  'Published. Members receive the new credentials on their next sync.':
-      'Veröffentlicht. Die Mitglieder erhalten die neuen Zugangsdaten bei ihrer nächsten Synchronisierung.',
   'Delete downloaded files': 'Heruntergeladene Dateien löschen',
   'Delete downloaded files?': 'Heruntergeladene Dateien löschen?',
   'This deletes everything in\n{path}': 'Damit wird alles gelöscht in\n{path}',
@@ -462,4 +450,26 @@ const germanTexts = <String, String>{
   'Hold the QR code inside the frame, about 20 cm from the camera.':
       'Halte den QR-Code in den Rahmen, etwa 20 cm von der Kamera entfernt.',
   'Not recognized yet: {reason}': 'Noch nicht erkannt: {reason}',
+  'Afterwards, create a new app password on the server and revoke the old one. Send the new password to the remaining members; they enter it under Settings → Change WebDAV access.':
+      'Lege danach auf dem Server ein neues App-Passwort an und widerrufe das alte. Schicke das neue Passwort den übrigen Mitgliedern; sie tragen es unter Einstellungen → WebDAV-Zugang ändern ein.',
+  'Change WebDAV access':
+      'WebDAV-Zugang ändern',
+  'Check and save':
+      'Prüfen und speichern',
+  'Checking the folder through Tor…':
+      'Ordner wird über Tor geprüft…',
+  'Leave empty to keep the current one':
+      'Leer lassen, um das bisherige zu behalten',
+  'No RedCourier group was found in this folder. Check the folder URL.':
+      'In diesem Ordner wurde keine RedCourier-Gruppe gefunden. Prüfe die URL des Ordners.',
+  'Or paste a new invite from your admin:':
+      'Oder füge eine neue Einladung deines Admins ein:',
+  'The group in this folder has a different admin key than this device knows (an admin was changed, or this is another group). Enter the current group fingerprint from your admin. Found: {fp}':
+      'Die Gruppe in diesem Ordner hat einen anderen Admin-Schlüssel, als dieses Gerät kennt (ein Admin wurde geändert, oder es ist eine andere Gruppe). Gib den aktuellen Gruppen-Fingerprint deines Admins ein. Gefunden: {fp}',
+  'Used only on this device. Enter new access data here when your admin changed the app password or moved the folder. It is checked before it is saved.':
+      'Gilt nur auf diesem Gerät. Trage hier neue Zugangsdaten ein, wenn dein Admin das App-Passwort geändert oder den Ordner verschoben hat. Sie werden vor dem Speichern geprüft.',
+  'WebDAV access':
+      'WebDAV-Zugang',
+  'WebDAV access checked and saved.':
+      'WebDAV-Zugang geprüft und gespeichert.',
 };
