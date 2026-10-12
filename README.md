@@ -302,3 +302,8 @@ x64)"*, or in an administrator PowerShell:
 The launcher icons are generated from `assets/icon/` with
 `dart run flutter_launcher_icons`. German texts live in `lib/i18n_de.dart`; a
 test fails if a text is missing.
+
+## License
+
+RedCourier is free software under the
+[GNU General Public License v3.0 or later](LICENSE.md).
