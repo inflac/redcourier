@@ -14,12 +14,10 @@ class I18n {
 
   static final language = ValueNotifier<String>('en');
 
+  /// English unless the user chose another language in the settings.
   static Future<void> load() async {
     final saved = Prefs.getString(_prefKey);
-    final system = PlatformDispatcher.instance.locale.languageCode;
-    language.value = supported.containsKey(saved)
-        ? saved!
-        : (supported.containsKey(system) ? system : 'en');
+    language.value = supported.containsKey(saved) ? saved! : 'en';
   }
 
   static Future<void> set(String code) async {

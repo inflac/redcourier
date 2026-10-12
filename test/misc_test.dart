@@ -18,6 +18,8 @@ void main() {
 
   test('settings survive a restart; a damaged settings file starts empty', () async {
     await Prefs.init(tmp);
+    await I18n.load();
+    expect(I18n.language.value, 'en', reason: 'English until the user picks another language');
     await Prefs.set('tor_port', 9150);
     await Prefs.set('language', 'de');
     await Prefs.init(tmp);
