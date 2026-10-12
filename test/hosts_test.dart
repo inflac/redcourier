@@ -101,6 +101,7 @@ void main() {
         }
       // ── temp.sh ──
       } else if (path == '/ts/upload' && r.method == 'POST') {
+        expect(r.headers.contentType!.parameters['boundary'], isNot(contains('redcourier')));
         final (_, name, file) = parseMultipart(r, body);
         stored['/ts/x1/$name'] = file!;
         r.response.write('${base()}/ts/x1/$name\n');

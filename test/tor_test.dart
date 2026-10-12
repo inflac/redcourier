@@ -89,12 +89,14 @@ class FakeSocks {
 void main() {
   late FakeSocks socks;
   late HttpServer web;
+  String? lastUserAgent;
 
   setUp(() async {
     socks = FakeSocks(await ServerSocket.bind(InternetAddress.loopbackIPv4, 0));
     web = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     web.listen((r) async {
       final body = await utf8.decodeStream(r);
+      lastUserAgent = r.headers.value(HttpHeaders.userAgentHeader);
       r.response.write('${r.method} ${r.uri.path} $body');
       await r.response.close();
     });
@@ -113,6 +115,7 @@ void main() {
     req.write('payload');
     final res = await req.close();
     expect(await utf8.decodeStream(res), 'POST /x payload');
+    expect(lastUserAgent, TorNetwork.userAgent, reason: 'looks like Tor Browser, not like the app');
     client.close();
     expect(socks.requests, ['localhost:${web.port}']);
     expect(socks.users.single, startsWith('redcourier:'));

@@ -127,8 +127,8 @@ files ──container + encrypt (streamed)──▶ payload.rcb ──split─�
 part_i ──wrap in a ZIP (one entry "redcourier.part")──▶ <random>.zip ──▶ upload
 ```
 
-Inside the encryption the files are stored in a simple container (payload
-format `rcp1`): `"RCP1"`, the number of files, then per file the length of its
+Inside the encryption the files are stored in a simple container: `"RCP1"`,
+the number of files, then per file the length of its
 name, the UTF-8 name, the size and the bytes. Names are encrypted like the
 content. The files are read from where the user keeps them and encrypted
 while they are read, so sending never writes a plaintext copy.
@@ -136,14 +136,17 @@ while they are read, so sending never writes a plaintext copy.
 The payload is encrypted in 1 MiB chunks with a fresh random key:
 
 ```text
-"RCB1" | chunk size | 8-byte nonce prefix | chunk_0 | chunk_1 | …
+8-byte random nonce prefix | chunk_0 | chunk_1 | …
 chunk_i = AES-256-GCM(payload_key, nonce = prefix || i,
                       aad = payload id || i || final flag)
 ```
 
 The final flag detects truncation, the payload id in the associated data stops
-one payload from being swapped for another. Decryption writes to a temporary
-file and only keeps it when every chunk verified.
+one payload from being swapped for another. The blob has no format marker or
+plaintext header, so it cannot be told apart from random data; its format
+(payload format `rcp2`) is recorded in the encrypted delivery entry.
+Deliveries of version 0.0.4 (`rcp1`, the same container in a blob starting with
+`"RCB1"` and the chunk size) are still read.
 
 Large payloads are split into parts of at most 256 MiB. Each part is cut to
 the limit of the host that receives it, and part *i* goes to the *i*-th host in
@@ -200,9 +203,14 @@ What the app cannot control: files the user opens afterwards may leave traces
 write memory to swap or a hibernation file. Saving to an encrypted volume and,
 for high-risk use, Tails (which keeps everything in RAM) address these.
 
-The hosts see only ZIP files with random names and encrypted content, their
-size and the upload and download times (through Tor). They do not see file
-names, notes, senders or recipients.
+The hosts see only ZIP files with random names, holding one stored entry with
+a random name and content that looks random; uploads use a browser-like form
+boundary and Tor Browser's User-Agent (as do all other requests of the app,
+including WebDAV). They see the size and the upload and download times
+(through Tor), and that several parts of similar size may be uploaded at the
+same time. They do not see file names, notes, senders or recipients. The TLS
+handshake of the app is not Tor Browser's, so a host that fingerprints TLS can
+still tell that it is not a browser.
 
 ## Changes compared to the first draft
 

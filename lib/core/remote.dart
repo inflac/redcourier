@@ -67,7 +67,6 @@ class WebDavStore implements RemoteStore {
   Future<HttpClient> _client() async {
     final c = await clientFactory();
     c.connectionTimeout = const Duration(seconds: 60);
-    c.userAgent = 'RedCourier';
     return c;
   }
 

@@ -38,6 +38,10 @@ class TorNetwork {
   /// Separates Tor circuits between the groups on this device.
   static String isolationKey = 'default';
 
+  /// Sent as User-Agent on every HTTP request: the one Tor Browser sends,
+  /// so servers do not see "RedCourier" or Dart's default.
+  static const userAgent = 'Mozilla/5.0 (Windows NT 10.0; rv:140.0) Gecko/20100101 Firefox/140.0';
+
   /// True if the app runs under torsocks (LD_PRELOAD).
   static bool underTorsocks = _detectTorsocks();
 
@@ -93,6 +97,7 @@ class TorNetwork {
     // Never take a proxy from the environment (http_proxy and friends).
     final client = HttpClient()
       ..findProxy = ((_) => 'DIRECT')
+      ..userAgent = userAgent
       ..idleTimeout = const Duration(seconds: 10);
     if (underTorsocks) {
       await _verifyTorsocks();
@@ -251,7 +256,9 @@ class TorNetwork {
 class TorHttpOverrides extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {
-    final client = super.createHttpClient(context)..findProxy = ((_) => 'DIRECT');
+    final client = super.createHttpClient(context)
+      ..findProxy = ((_) => 'DIRECT')
+      ..userAgent = TorNetwork.userAgent;
     if (!TorNetwork.underTorsocks) {
       client.connectionFactory = (uri, proxyHost, proxyPort) async =>
           TorNetwork._connectionTask(uri, await TorNetwork.findSocksPort(), TorNetwork._isolation(null));

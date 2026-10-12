@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:redcourier/core/blob_crypto.dart';
@@ -573,6 +574,38 @@ void main() {
         ..writeAsStringSync('second report');
       return [a.path, b.path, c.path, d.path];
     }
+
+    test('nothing in a blob or part points to RedCourier', () async {
+      final blob = p.join(work.path, 'payload.rcb');
+      await Delivery.packEncrypted(files(), blob, key, 'pid');
+      final head = File(blob).readAsBytesSync().sublist(0, 16);
+      expect(String.fromCharCodes(head.sublist(0, 4)), isNot('RCB1'), reason: 'no format marker');
+
+      final part = await Delivery.makePart(blob, 0, 100000, work);
+      final zipText = latin1.decode(File(part).readAsBytesSync());
+      expect(zipText.toLowerCase(), isNot(contains('redcourier')));
+      expect(p.basename(part), matches(RegExp(r'^[0-9a-f]{32}\.zip$')));
+
+      // Parts from earlier versions (entry "redcourier.part") are still read.
+      final legacy = File(p.join(work.path, 'legacy.zip'));
+      final archive = Archive()..add(ArchiveFile.bytes('redcourier.part', [1, 2, 3]));
+      legacy.writeAsBytesSync(ZipEncoder().encode(archive));
+      final out = p.join(work.path, 'joined');
+      await Delivery.appendPart(legacy.path, out);
+      expect(File(out).readAsBytesSync(), [1, 2, 3]);
+    });
+
+    test('deliveries in the previous format (rcp1, with header) still open', () async {
+      final blob = p.join(work.path, 'payload.rcb');
+      final paths = files();
+      await Delivery.packEncrypted(paths, blob, key, 'pid');
+      // Re-encrypt the same container the way 0.0.4 did.
+      final old = p.join(work.path, 'old.rcb');
+      await BlobCrypto.encryptStream(BlobCrypto.decryptStream(blob, key, 'pid', header: false), old, key, 'pid');
+      expect(String.fromCharCodes(File(old).readAsBytesSync().sublist(0, 4)), 'RCB1');
+      final written = await Delivery.unpackEncrypted(old, key, 'pid', target.path, format: 'rcp1');
+      expect(File(written[1]).readAsStringSync(), 'secret plan');
+    });
 
     test('packing writes only the encrypted blob, saving writes only into the target', () async {
       final paths = files();

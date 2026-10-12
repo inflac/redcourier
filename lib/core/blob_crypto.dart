@@ -22,14 +22,13 @@ class BlobCrypto {
   static const defaultChunkSize = 1024 * 1024;
   static const maxChunkSize = 16 * 1024 * 1024;
 
-  static Uint8List _u32(int v) =>
-      Uint8List(4)..buffer.asByteData().setUint32(0, v, Endian.big);
+  static Uint8List _u32(int v) => Uint8List(4)..buffer.asByteData().setUint32(0, v, Endian.big);
 
   static List<int> _aad(String blobName, int index, bool last) =>
       [...utf8.encode(blobName), ..._u32(index), last ? 1 : 0];
 
-  static Future<void> encryptFile(String inPath, String outPath, Uint8List key,
-      String blobName, {int chunkSize = defaultChunkSize}) async {
+  static Future<void> encryptFile(String inPath, String outPath, Uint8List key, String blobName,
+      {int chunkSize = defaultChunkSize}) async {
     final aes = AesGcm.with256bits();
     final secret = SecretKey(key);
     final prefix = randomBytes(8);
@@ -55,8 +54,7 @@ class BlobCrypto {
 
   /// Decrypts into [outPath]. Writes to a temporary file first so a failed
   /// or tampered download never leaves a partial file behind.
-  static Future<void> decryptFile(
-      String inPath, String outPath, Uint8List key, String blobName) async {
+  static Future<void> decryptFile(String inPath, String outPath, Uint8List key, String blobName) async {
     final aes = AesGcm.with256bits();
     final secret = SecretKey(key);
     final input = await File(inPath).open();
@@ -67,8 +65,10 @@ class BlobCrypto {
       final total = await input.length();
       final header = await input.read(headerLength);
       if (header.length != headerLength ||
-          header[0] != magic[0] || header[1] != magic[1] ||
-          header[2] != magic[2] || header[3] != magic[3]) {
+          header[0] != magic[0] ||
+          header[1] != magic[1] ||
+          header[2] != magic[2] ||
+          header[3] != magic[3]) {
         throw CryptoException('Not a RedCourier file.');
       }
       final chunkSize = ByteData.sublistView(header, 4, 8).getUint32(0, Endian.big);
@@ -89,8 +89,7 @@ class BlobCrypto {
         try {
           final plain = await aes.decrypt(
             SecretBox(data.sublist(0, data.length - tagLength),
-                nonce: [...prefix, ..._u32(i)],
-                mac: Mac(data.sublist(data.length - tagLength))),
+                nonce: [...prefix, ..._u32(i)], mac: Mac(data.sublist(data.length - tagLength))),
             secretKey: secret,
             aad: _aad(blobName, i, last),
           );
@@ -113,10 +112,15 @@ class BlobCrypto {
     }
   }
 
-  /// Encrypts a stream straight into [outPath] (same format as
-  /// [encryptFile]), so no plaintext copy is ever written.
+  /// Encrypts a stream straight into [outPath], so no plaintext copy is ever
+  /// written. With [header] the file starts like [encryptFile] ("RCB1",
+  /// chunk size, nonce prefix). Without it, only the random nonce prefix is
+  /// written and the chunk size is [defaultChunkSize]: the file is then
+  /// indistinguishable from random data. Which variant a blob uses is
+  /// recorded elsewhere (the encrypted delivery entry).
   static Future<void> encryptStream(Stream<List<int>> input, String outPath, Uint8List key, String blobName,
-      {int chunkSize = defaultChunkSize}) async {
+      {int chunkSize = defaultChunkSize, bool header = true}) async {
+    if (!header) chunkSize = defaultChunkSize;
     final aes = AesGcm.with256bits();
     final secret = SecretKey(key);
     final prefix = randomBytes(8);
@@ -131,7 +135,7 @@ class BlobCrypto {
     }
 
     try {
-      await out.writeFrom([...magic, ..._u32(chunkSize), ...prefix]);
+      await out.writeFrom(header ? [...magic, ..._u32(chunkSize), ...prefix] : prefix);
       // The last chunk carries the final flag, so one full chunk is held back
       // until it is known whether more data follows.
       final buffer = BytesBuilder(copy: false);
@@ -160,22 +164,36 @@ class BlobCrypto {
   /// Decrypts [inPath] chunk by chunk. Every chunk is authenticated before it
   /// is handed on; a truncated or modified file ends the stream with a
   /// [CryptoException], so consumers must discard what they wrote so far.
-  static Stream<Uint8List> decryptStream(String inPath, Uint8List key, String blobName) async* {
+  static Stream<Uint8List> decryptStream(String inPath, Uint8List key, String blobName,
+      {bool header = true}) async* {
     final aes = AesGcm.with256bits();
     final secret = SecretKey(key);
     final input = await File(inPath).open();
     try {
       final total = await input.length();
-      final header = await input.read(headerLength);
-      if (header.length != headerLength ||
-          header[0] != magic[0] || header[1] != magic[1] ||
-          header[2] != magic[2] || header[3] != magic[3]) {
-        throw CryptoException('Not a RedCourier file.');
+      final int chunkSize;
+      final List<int> prefix;
+      final int headLength;
+      if (header) {
+        final head = await input.read(headerLength);
+        if (head.length != headerLength ||
+            head[0] != magic[0] ||
+            head[1] != magic[1] ||
+            head[2] != magic[2] ||
+            head[3] != magic[3]) {
+          throw CryptoException('Not a RedCourier file.');
+        }
+        chunkSize = ByteData.sublistView(head, 4, 8).getUint32(0, Endian.big);
+        if (chunkSize == 0 || chunkSize > maxChunkSize) throw CryptoException('Invalid chunk size.');
+        prefix = head.sublist(8, 16);
+        headLength = headerLength;
+      } else {
+        prefix = await input.read(8);
+        if (prefix.length != 8) throw CryptoException('File is truncated.');
+        chunkSize = defaultChunkSize;
+        headLength = 8;
       }
-      final chunkSize = ByteData.sublistView(header, 4, 8).getUint32(0, Endian.big);
-      if (chunkSize == 0 || chunkSize > maxChunkSize) throw CryptoException('Invalid chunk size.');
-      final prefix = header.sublist(8, 16);
-      final body = total - headerLength;
+      final body = total - headLength;
       final encChunk = chunkSize + tagLength;
       if (body < tagLength) throw CryptoException('File is truncated.');
       final chunks = (body + encChunk - 1) ~/ encChunk;

@@ -972,7 +972,7 @@ class GroupSession {
   /// [deleteDownload] or until the delivery is removed or expires.
   Future<String> saveFiles(Entry entry, Directory targetDir,
       {void Function(String template, Map<String, Object?> args, double? progress)? onProgress}) async {
-    if (entry.payload.format != Delivery.payloadFormat) {
+    if (!Delivery.readableFormats.contains(entry.payload.format)) {
       throw SyncException('This delivery was sent with an older version of RedCourier. Ask the sender to '
           'send it again.');
     }
@@ -987,7 +987,8 @@ class GroupSession {
     for (var i = 2; await target.exists(); i++) {
       target = Directory(p.join(targetDir.path, '$folderName ($i)'));
     }
-    await Delivery.unpackEncrypted(blob.path, entry.payload.key, entry.payload.id, target.path);
+    await Delivery.unpackEncrypted(blob.path, entry.payload.key, entry.payload.id, target.path,
+        format: entry.payload.format);
     return target.path;
   }
 

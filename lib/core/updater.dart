@@ -158,7 +158,6 @@ class Updater {
       throw UpdateException('Update URLs must use https.');
     }
     final req = await c.getUrl(uri);
-    req.headers.set(HttpHeaders.userAgentHeader, 'redcourier-updater/$currentVersion');
     if (json) req.headers.set(HttpHeaders.acceptHeader, 'application/vnd.github+json');
     final res = await req.close().timeout(const Duration(seconds: 120));
     if (res.statusCode != 200) {

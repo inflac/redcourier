@@ -26,16 +26,19 @@ import 'messages.dart';
 ///   "RCP1" | file count u32 | per file: name length u16 | UTF-8 name |
 ///   size u64 | bytes
 class Delivery {
-  static const partEntryName = 'redcourier.part';
   static const defaultPartSize = 256 * 1024 * 1024;
 
-  static const payloadFormat = 'rcp1';
+  /// Current payload format: the container below inside a blob without any
+  /// recognizable header. 'rcp1' (same container, blob with "RCB1" header)
+  /// is still read.
+  static const payloadFormat = 'rcp2';
+  static const readableFormats = {'rcp1', 'rcp2'};
   static const _containerMagic = [0x52, 0x43, 0x50, 0x31]; // "RCP1"
   static const maxFileNameBytes = 1024;
 
   /// Encrypts [paths] into the blob [blobPath] without any plaintext copy.
   static Future<void> packEncrypted(List<String> paths, String blobPath, Uint8List key, String payloadId) =>
-      Isolate.run(() => BlobCrypto.encryptStream(_container(paths), blobPath, key, payloadId));
+      Isolate.run(() => BlobCrypto.encryptStream(_container(paths), blobPath, key, payloadId, header: false));
 
   static Stream<List<int>> _container(List<String> paths) async* {
     yield [..._containerMagic, ..._uint(paths.length, 4)];
@@ -62,15 +65,17 @@ class Delivery {
   /// Decrypts the blob straight into [targetDir] (created if needed) and
   /// returns the written files. Names are made safe and unique. If the blob
   /// turns out to be damaged or forged, everything written is deleted again.
-  static Future<List<String>> unpackEncrypted(String blobPath, Uint8List key, String payloadId, String targetDir) =>
-      Isolate.run(() => _unpack(blobPath, key, payloadId, targetDir));
+  static Future<List<String>> unpackEncrypted(String blobPath, Uint8List key, String payloadId, String targetDir,
+          {String format = payloadFormat}) =>
+      Isolate.run(() => _unpack(blobPath, key, payloadId, targetDir, format));
 
-  static Future<List<String>> _unpack(String blobPath, Uint8List key, String payloadId, String targetDir) async {
+  static Future<List<String>> _unpack(
+      String blobPath, Uint8List key, String payloadId, String targetDir, String format) async {
     final dir = Directory(targetDir);
     final createdDir = !await dir.exists();
     await dir.create(recursive: true);
     final written = <String>[];
-    final reader = _Reader(BlobCrypto.decryptStream(blobPath, key, payloadId));
+    final reader = _Reader(BlobCrypto.decryptStream(blobPath, key, payloadId, header: format == 'rcp1'));
     try {
       final magic = await reader.read(4);
       for (var i = 0; i < 4; i++) {
@@ -116,7 +121,8 @@ class Delivery {
   static int _readUint(List<int> bytes) => bytes.fold(0, (v, b) => (v << 8) | b);
 
   /// Wraps [length] bytes of [blobPath] starting at [offset] into a part ZIP
-  /// with a random name in [work]. Returns its path.
+  /// with a random name in [work]. The single entry has a random name too,
+  /// so nothing in the ZIP points to RedCourier. Returns its path.
   static Future<String> makePart(String blobPath, int offset, int length, Directory work) =>
       Isolate.run(() async {
         final raw = File(p.join(work.path, 'raw_${randomHex(6)}'));
@@ -137,7 +143,7 @@ class Delivery {
         }
         final zipPath = p.join(work.path, '${randomHex(16)}.zip');
         final enc = ZipFileEncoder()..create(zipPath, level: ZipFileEncoder.store);
-        await enc.addFile(raw, partEntryName);
+        await enc.addFile(raw, '${randomHex(8)}.bin');
         await enc.close();
         await raw.delete();
         return zipPath;
@@ -151,7 +157,8 @@ class Delivery {
         final input = InputFileStream(partZip);
         try {
           final archive = ZipDecoder().decodeStream(input);
-          final entry = archive.files.where((f) => f.isFile && f.name == partEntryName).toList();
+          // Exactly one file, whatever its name (earlier versions: "redcourier.part").
+          final entry = archive.files.where((f) => f.isFile).toList();
           if (entry.length != 1) throw AppException('A downloaded part is not a RedCourier part.');
           final tmp = '$blobPath.piece';
           final out = OutputFileStream(tmp);

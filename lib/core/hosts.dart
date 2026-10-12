@@ -126,7 +126,8 @@ Future<HttpClientResponse> _sendFile(HttpClientRequest req, File file, int total
 /// multipart/form-data with text fields followed by one file field.
 Future<HttpClientResponse> _postMultipart(HttpClient client, Uri uri, Map<String, String> fields,
     String fileField, String fileName, File file, {HostProgress? onProgress}) async {
-  final boundary = '----redcourier${randomHex(12)}';
+  // Shaped like a browser's boundary; nothing that names the app.
+  final boundary = '----WebKitFormBoundary${randomHex(8)}';
   final head = StringBuffer();
   fields.forEach((k, v) {
     head
