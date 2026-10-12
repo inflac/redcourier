@@ -382,6 +382,8 @@ SHA256SUMS        SHA-256 of every file in the package
 SHA256SUMS.sig    base64(Ed25519(release key, SHA256SUMS))
 <zip>.sig         base64(Ed25519(release key, zip))
 <AppImage>.sig    base64(Ed25519(release key, RedCourier-<version>-x86_64.AppImage))
+<setup>.exe.sig   base64(Ed25519(release key, RedCourier-<version>-windows-x64-setup.exe))
+<apk>.sig         base64(Ed25519(release key, RedCourier-<version>.apk))
 ```
 
 The zip is for installing; the separately published AppImage with its
@@ -390,7 +392,17 @@ signature is what the in-app updater downloads.
 The Tails installer verifies `SHA256SUMS.sig` with the key built into it and
 then every file against `SHA256SUMS`. On the first installation it shows the
 key's fingerprint, which the user compares with the value below or one from a
-trusted contact. The key is then stored in the install folder; an update
+trusted contact.
+
+```text
+-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAqM4F702GERqjZ1KhRh6VUnINE4iPyedSiua9RX66v58=
+-----END PUBLIC KEY-----
+```
+
+Fingerprint: `3DAE 4A64 9D09 1510 DC7E 8A39 DB63 6779 16B3 2613 3E51 1EA0 1588 A21B 9714 2CC0`
+
+The key is then stored in the install folder; an update
 signed with a different key is refused unless the user explicitly accepts the
 new fingerprint. A package that is signed with a matching key but altered in
 any byte fails the check.

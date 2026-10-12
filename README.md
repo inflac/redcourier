@@ -110,7 +110,19 @@ A forged package could contain an installer that skips all checks; only a
 check with the published key, done before running anything from the package,
 catches that.
 
-<!-- release-key -->
+Release public key:
+
+```text
+-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAqM4F702GERqjZ1KhRh6VUnINE4iPyedSiua9RX66v58=
+-----END PUBLIC KEY-----
+```
+
+Fingerprint (SHA-256 of the key, as the installer shows it):
+
+```text
+3DAE 4A64 9D09 1510 DC7E 8A39 DB63 6779 16B3 2613 3E51 1EA0 1588 A21B 9714 2CC0
+```
 
 To check the zip before unpacking it, save the release public key as
 `release_signing_key.pem` and run:
