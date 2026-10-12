@@ -460,4 +460,7 @@ const germanTexts = <String, String>{
       'Gruppe wird erstellt…',
   'Creating the group on the server through Tor. This can take a minute.':
       'Die Gruppe wird über Tor auf dem Server angelegt. Das kann eine Minute dauern.',
+  'Hold the QR code inside the frame, about 20 cm from the camera.':
+      'Halte den QR-Code in den Rahmen, etwa 20 cm von der Kamera entfernt.',
+  'Not recognized yet: {reason}': 'Noch nicht erkannt: {reason}',
 };
